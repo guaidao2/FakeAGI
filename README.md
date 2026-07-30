@@ -4,7 +4,9 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-red.svg)](https://pytorch.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**FakeAGI** 是一个基于自维持哲学的通用认知架构实验性实现。它没有外部奖励函数，没有预训练阶段，不依赖大语言模型——它只是在活着，并在这个过程中展现出智能。
+**玄幕安全团队-guaidao2** 出品
+
+FakeAGI 是一个基于自维持哲学的通用认知架构实验性实现。它没有外部奖励函数，没有预训练阶段，不依赖大语言模型——它只是在活着，并在这个过程中展现出智能。
 
 ---
 
