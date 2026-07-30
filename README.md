@@ -94,9 +94,9 @@ agi/
 ## 技术栈
 
 - **时序推理**：液体时间常数网络（LTC）
-- **决策**：GameNN 多策略博弈矩阵
+- **决策**：GameNN 多策略博弈矩阵（[GameNN-WorldModel](https://github.com/guaidao2/GameNN-WorldModel)）
 - **世界模型**：条件预测（hidden+action→next_hidden）
-- **生长**：自适应隐藏维度扩展
+- **生长**：自适应隐藏维度扩展（[Growing-LLM](https://github.com/guaidao2/Growing-LLM)）
 - **元认知**：知识缺口检测 + 目标生成 + 反射压制
 
 ## 设计原则

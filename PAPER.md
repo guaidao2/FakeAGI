@@ -220,11 +220,11 @@ FakeAGI 架构是一个三层耦合循环：自我层 → 认知层 → 物理�
 
 #### 多策略决策 (GameNN)
 
-基于博弈论的策略矩阵。每个策略头独立学习 Q 函数，通过博弈矩阵选择最优策略。支持置信度驱动的策略权重更新和 ε-贪心探索。
+基于博弈论的策略矩阵。每个策略头独立学习 Q 函数，通过博弈矩阵选择最优策略。支持置信度驱动的策略权重更新和 ε-贪心探索。GameNN 核心实现见 [GameNN-WorldModel](https://github.com/guaidao2/GameNN-WorldModel)。
 
 #### 生长引擎 (Growth)
 
-当损失函数在长窗口内不再下降时，系统自动扩展隐藏层维度。扩展策略：hidden_dim ← hidden_dim × 1.2。旧权重通过剪裁复制保留。支持输入维度生长（感知维度变化时自动扩展编码器）。
+当损失函数在长窗口内不再下降时，系统自动扩展隐藏层维度。扩展策略：hidden_dim ← hidden_dim × 1.2。旧权重通过剪裁复制保留。支持输入维度生长（感知维度变化时自动扩展编码器）。生长架构独立实验见 [Growing-LLM](https://github.com/guaidao2/Growing-LLM) 和原版 [GameNN-WorldModel](https://github.com/guaidao2/GameNN-WorldModel)。
 
 #### 元认知层 (Meta-cognition)
 
