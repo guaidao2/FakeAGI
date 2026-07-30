@@ -1,0 +1,158 @@
+"""
+GameNN 决策模块 — 完整版（含 Q 学习 + 博弈矩阵）
+
+基于原版 GameNN-WorldModel 的策略头实现。
+输入：LNN 的 hidden state 向量
+输出：选中的动作 + 策略索引
+学习：TD 误差更新 Q 值 + 策略权重
+"""
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class StrategyQNet(nn.Module):
+    """每个策略头对应一个状态→动作 Q 网络"""
+    def __init__(self, state_dim, n_actions, hidden_dim=32):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, n_actions),
+        )
+    
+    def forward(self, state):
+        return self.net(state)
+
+
+class GameNNDecision:
+    """
+    完整 GameNN 决策模块。
+    
+    每个策略头有独立的 Q 网络。
+    策略选择基于混合 score：Q 值 + 策略权重 + 探索噪声。
+    博弈矩阵记录策略间胜负。
+    """
+    
+    def __init__(self, n_strategies=4, n_actions=5, state_dim=64, gamma=0.9, lr=0.01):
+        self.n_strategies = n_strategies
+        self.n_actions = n_actions
+        self.state_dim = state_dim
+        self.gamma = gamma
+        self.lr = lr
+        self.epsilon = 0.3
+        
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # 每个策略一个 Q 网络
+        self.q_nets = [StrategyQNet(state_dim, n_actions).to(self.device) for _ in range(n_strategies)]
+        self.optimizers = [torch.optim.AdamW(q.parameters(), lr=lr) for q in self.q_nets]
+        
+        # 策略权重（博弈矩阵边缘概率）
+        self.strategy_weights = np.ones(n_strategies) / n_strategies
+        self.strategy_scores = np.zeros(n_strategies)
+        self.strategy_counts = np.ones(n_strategies)
+        
+        # 博弈矩阵
+        self.game_matrix = np.zeros((n_strategies, n_strategies))
+        
+        # 缓存（用于学习）
+        self.last_state = None
+        self.last_strategy = None
+        self.last_action = None
+        
+        # 置信度跟踪（用于反射抑制）
+        self.strategy_update_counts = np.zeros(n_strategies)  # 每个策略的更新次数
+        self.confidence = 0.0  # 整体置信度 [0, 1]
+        
+    def get_confidence(self) -> float:
+        """返回学习系统的置信度。越高→越应该用学习替代反射"""
+        min_updates = 20  # 最少需要 20 次更新才可靠
+        ratio = min(1.0, np.mean(self.strategy_update_counts) / min_updates)
+        return ratio * (1.0 - self.epsilon)  # 置信度随探索率降低而升高
+    
+    def select_action(self, state: np.ndarray) -> tuple:
+        """选择动作，返回 (action_idx, strategy_idx)"""
+        self.last_state = state.copy()
+        state_t = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        
+        # ε-贪心选策略
+        if np.random.random() < self.epsilon:
+            strategy_idx = np.random.randint(self.n_strategies)
+        else:
+            strategy_idx = np.argmax(self.strategy_weights)
+        
+        # 策略网络选动作
+        with torch.no_grad():
+            q_values = self.q_nets[strategy_idx](state_t)
+            action = int(q_values.argmax().item())
+        
+        self.last_strategy = strategy_idx
+        self.last_action = action
+        return action, strategy_idx
+    
+    def learn(self, reward: float, next_state: np.ndarray = None, done: bool = False):
+        """TD 误差学习"""
+        if self.last_state is None or self.last_strategy is None:
+            return
+        
+        s = torch.tensor(self.last_state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        a = torch.tensor([self.last_action], dtype=torch.long, device=self.device)
+        r = torch.tensor([reward], dtype=torch.float32, device=self.device)
+        
+        q_net = self.q_nets[self.last_strategy]
+        opt = self.optimizers[self.last_strategy]
+        
+        # TD 目标
+        with torch.no_grad():
+            if next_state is not None and not done:
+                ns = torch.tensor(next_state, dtype=torch.float32, device=self.device).unsqueeze(0)
+                next_q = q_net(ns).max().item()
+                target = reward + self.gamma * next_q
+            else:
+                target = reward
+        
+        # TD 误差
+        q_sa = q_net(s).gather(1, a.unsqueeze(1)).squeeze()
+        loss = F.mse_loss(q_sa, torch.tensor([target], device=self.device))
+        
+        opt.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(q_net.parameters(), 1.0)
+        opt.step()
+        
+        # 更新置信度
+        self.strategy_update_counts[self.last_strategy] += 1
+        self.confidence = self.get_confidence()
+        
+        # 更新策略权重（Softmax）
+        self.strategy_counts[self.last_strategy] += 1
+        self.strategy_scores[self.last_strategy] += reward
+        avg = self.strategy_scores / np.maximum(self.strategy_counts, 1)
+        exp_scores = np.exp(avg - avg.max())
+        self.strategy_weights = exp_scores / exp_scores.sum()
+    
+    def update_matrix(self, my_idx: int, opp_idx: int, reward: float):
+        """更新博弈矩阵"""
+        self.game_matrix[my_idx, opp_idx] += reward
+    
+    def grow_state_dim(self, new_dim: int):
+        """当 LNN 隐藏层增长时扩展 Q 网络"""
+        old_dim = self.state_dim
+        self.state_dim = new_dim
+        for i in range(self.n_strategies):
+            old_weights = {k: v.data.clone().cpu() for k, v in self.q_nets[i].state_dict().items()}
+            self.q_nets[i] = StrategyQNet(new_dim, self.n_actions).to(self.device)
+            with torch.no_grad():
+                for name, param in self.q_nets[i].named_parameters():
+                    if name in old_weights:
+                        ow = old_weights[name]
+                        h = min(param.shape[0], ow.shape[0])
+                        w = min(param.shape[1], ow.shape[1]) if len(param.shape) > 1 else param.shape[0]
+                        if len(param.shape) > 1:
+                            param[:h, :w] = ow[:h, :w].to(self.device)
+                        else:
+                            param[:h] = ow[:h].to(self.device)
+            self.optimizers[i] = torch.optim.AdamW(self.q_nets[i].parameters(), lr=self.lr)

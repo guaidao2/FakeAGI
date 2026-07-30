@@ -1,0 +1,517 @@
+"""
+AGI 主入口 — 自维持循环（生物模拟版）
+
+集成：
+  身体模拟（BodyModel）
+  多驱动力（DriveSystem）
+  空间记忆（SpatialMemory）
+  危险感知（DangerSystem）
+  睡眠巩固（SleepCycle）
+  认知核心（LNN + World Model + GameNN）
+"""
+
+import time
+import numpy as np
+from core.body import BodyModel
+from core.drives import DriveSystem
+from core.self_model import SelfModel
+from core.homeostasis import Homeostasis
+from cognition.spatial_memory import SpatialMemory
+from cognition.danger import DangerSystem
+from cognition.sleep import SleepCycle
+from cognition.hemin import OtherModel
+from cognition.metacognition.core import MetacognitionLayer
+
+
+class AGI:
+    def __init__(self, config: dict = None):
+        self.cfg = config or {}
+        
+        # ─── 身体层 ───
+        self.body = BodyModel()
+        self.drives = DriveSystem()
+        self.self_model = SelfModel()
+        self.homeostasis = Homeostasis()
+        
+        # ─── 认知层 ───
+        self.cognition = None
+        self.spatial_memory = SpatialMemory()
+        self.danger_system = DangerSystem()
+        self.sleep_cycle = SleepCycle()
+        self.other_model = OtherModel()
+        
+        # ─── 环境 ───
+        self.env = None
+        
+        # ─── 经验缓存（供睡眠巩固使用） ───
+        self.replay_buffer = []
+        self.max_replay = 200
+        
+        # ─── 第五层：元认知 ───
+        self.metacognition = MetacognitionLayer(spatial_memory=self.spatial_memory)
+        self.override_action = -1
+        self._food_recently_tick = -1000
+        self.causal_error = 0.0
+        
+        # ─── 运行状态 ───
+        self.tick = 0
+        self.alive = True
+        self.last_action = 0
+        self.pos = [0, 0]
+        self.survival_ticks = 0
+        self.peak_health = 0.0
+    
+    def set_cognition(self, cognition):
+        self.cognition = cognition
+    
+    def set_env(self, env):
+        self.env = env
+    
+    def step(self):
+        """单 tick 自维持循环"""
+        self.tick += 1
+        
+        # ─── 1. 感知 ───
+        if self.env:
+            obs = self.env.observe()
+            if hasattr(self.env, 'get_pos'):
+                self.pos = self.env.get_pos()
+        else:
+            obs = np.zeros(4)
+        
+        # ─── 2. 危险感知 ───
+        threat = self.danger_system.sense(obs, self.tick)
+        danger_nearby = self.danger_system.is_threat_nearby()
+        
+        # ─── 3. 身体更新 ───
+        is_moving = (self.last_action in [0, 1, 2, 3])
+        energy_delta = -0.0005 if is_moving else -0.0001
+        water_delta = -0.0002
+        damage = 0.0
+        
+        if self.env:
+            if hasattr(self.env, 'get_energy_delta'):
+                energy_delta = self.env.get_energy_delta(self.last_action)
+            if hasattr(self.env, 'get_damage'):
+                damage = self.env.get_damage(self.last_action)
+        
+        self.body.update(energy_delta=energy_delta, water_delta=water_delta,
+                         damage=damage, is_moving=is_moving,
+                         was_moved_passively=getattr(self, '_pending_was_moved', False))
+        self._pending_was_moved = False
+        
+        # ─── 4. 睡眠检测 ───
+        if not self.body.is_sleeping:
+            if self.sleep_cycle.should_sleep(self.body.fatigue, self.body.circadian, self.body.energy):
+                self.body.is_sleeping = True
+                self.sleep_cycle.is_sleeping = True
+                self.sleep_cycle.sleep_duration = 0
+                if self.cognition:
+                    # 睡眠时记忆巩固
+                    consolidated = self.sleep_cycle.consolidate(self.replay_buffer)
+                    self.replay_buffer = consolidated[:self.max_replay]
+        else:
+            self.sleep_cycle.sleep_duration += 1
+            if self.sleep_cycle.should_wake(self.body.fatigue, self.body.energy):
+                self.body.is_sleeping = False
+                self.sleep_cycle.is_sleeping = False
+                self.body.fatigue = max(0.0, self.body.fatigue - 0.3)  # 醒来后疲劳大幅降低
+        
+        # ─── 5. 自模型更新标记位（实际更新放到认知处理之后） ───
+        surprise = 0.0
+        
+        # ─── 6. 驱动力更新 ───
+        body_state = self.body.get_state_dict()
+        self.drives.update(body_state, self.self_model.survival_prob, surprise, self.tick, danger_nearby)
+        dominant_drive = self.drives.get_dominance()
+        drive_bias = self.drives.get_action_bias()
+        
+        # ─── 7. 认知处理 ───
+        action = 0
+        if self.cognition and not self.body.is_sleeping:
+            # 构建完整自模型状态（身体 + 驱动力 + 空间）
+            body_vec = self.body.get_state_vector()
+            drive_vec = self.drives.get_state_vector()
+            self_state = np.concatenate([body_vec, drive_vec])
+            
+            # 探索率由驱动力决定
+            if dominant_drive in ("hunger", "thirst", "fear"):
+                exploration = 0.05
+            elif dominant_drive in ("boredom", "curiosity"):
+                exploration = 0.6
+            elif dominant_drive in ("fatigue",):
+                exploration = 0.1
+            else:
+                exploration = 0.2
+            
+            # 误差通路：行动通路 → 提高探索率（在 process 之前生效）
+            action, info = self.cognition.process(obs, self_state, exploration)
+            surprise = info.get("surprise", 0.0)
+            error_path = info.get("error_path", "perception")
+
+            # 误差通路：行动通路 → 随机探索调整
+            if error_path == "action" and surprise > 0.2 and not self.body.is_critical():
+                if np.random.random() < 0.3:
+                    action = np.random.randint(0, 4)
+            
+            # 学习驱动的反射抑制：当 GameNN 学到可靠策略时，抑制本能反射
+            gamenn_confidence = self.cognition.gamenn.confidence if hasattr(self.cognition, 'gamenn') else 0.0
+            suppress_reflex = gamenn_confidence > 0.15
+            
+            # 元认知系统更新
+            if self.metacognition is not None:
+                self.metacognition.update(
+                    world_model_loss=info.get("world_loss", 0.5),
+                    gamenn_confidence=gamenn_confidence,
+                    surprise=surprise,
+                    health=self.body.health,
+                    energy=self.body.energy,
+                    action=action,
+                    survived=self.alive,
+                    causal_error=getattr(self, 'causal_error', 0.0),
+                    agent_pos=self.pos if hasattr(self, 'pos') else None,
+                    env_size=getattr(self.env, 'size', 10) if self.env else 10,
+                    energy_delta=energy_delta
+                )
+                mc_state = self.metacognition.get_state()
+                if mc_state["override_action"] >= 0:
+                    self.override_action = mc_state["override_action"]
+                elif mc_state.get("override_target") is not None and hasattr(self, 'pos'):
+                    # 目标位置转动作
+                    tx, ty = mc_state["override_target"]
+                    dx_t = tx - self.pos[0]
+                    dy_t = ty - self.pos[1]
+                    if abs(dx_t) > 0.05 or abs(dy_t) > 0.05:
+                        self.override_action = 3 if dx_t > 0 else (2 if dx_t < 0 else (4 if dy_t > 0 else 1))
+            
+            # 即使反射活跃，仍保留少量随机探索（防止永远学不到新策略）
+            explore_override = np.random.random() < 0.1 * (1.0 - gamenn_confidence)
+            if explore_override:
+                action = np.random.randint(1, 5)
+            
+            # 强制好奇探索：confidence 低 + 身体安全 → 完全抑制反射，纯探索
+            curiosity_explore = gamenn_confidence < 0.05 and self.body.health > 0.5
+            if curiosity_explore:
+                suppress_reflex = True
+                action = np.random.randint(1, 5)
+            
+            # 驱动力-观测直接映射（仅在反射未被抑制时生效）
+            if not suppress_reflex and len(obs) >= 4:
+                dx, dy = obs[0], obs[1]
+                always_seek = self.body.energy < 0.8 or self.drives.hunger > 0.2
+                # 次级目标已到达时，用主要目标（食物）做导航
+                secondary_reached = len(obs) >= 4 and abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
+                if always_seek or secondary_reached:
+                    if abs(dx) > 0.05 or abs(dy) > 0.05:
+                        if abs(dx) > abs(dy):
+                            action = 3 if dx > 0 else 2
+                        else:
+                            action = 4 if dy > 0 else 1
+                elif self.drives.curiosity > 0.3 and (self.drives.hunger < 0.2 or self.body.energy > 0.8):
+                    if abs(dx) > abs(dy) and abs(dx) > 0.05:
+                        action = 3 if dx > 0 else 2
+                    elif abs(dy) > 0.05:
+                        action = 4 if dy > 0 else 1
+            
+            # 应激-决策耦合: 高应激改变决策策略
+            if self.body.stress > 0.5 and self.body.health < 0.3:
+                # 恐慌模式：迷宫环境中 obs 含义不同，需检测环境类型
+                if not hasattr(self.env, 'maze'):
+                    dx, dy = obs[0], obs[1]
+                    if abs(dx) > abs(dy) and abs(dx) > 0.02:
+                        action = 3 if dx > 0 else 2
+                    elif abs(dy) > 0.02:
+                        action = 4 if dy > 0 else 1
+                else:
+                    action = np.random.randint(1, 5)
+            # 高应激时减少探索
+            if self.body.stress > 0.5:
+                exploration = max(0.05, exploration * 0.5)
+            
+            # 自模型更新（使用认知产生的惊奇）
+            self.self_model.update(energy_delta=energy_delta, integrity_delta=-damage, surprise=surprise)
+            self.self_model.energy = self.body.health
+            
+            # GameNN 学习：基于能量变化的奖励信号
+            if hasattr(self.cognition, 'gamenn') and len(self_state) >= self.cognition.gamenn.state_dim:
+                reward = energy_delta * 10 + damage * (-5)  # 能量上升=正奖励，受伤=负奖励
+                next_state = self_state[:self.cognition.gamenn.state_dim]
+                self.cognition.gamenn.learn(reward, next_state=next_state)
+            
+            # 驱动力偏置修正动作
+            if np.max(np.abs(drive_bias)) > 0.5:
+                biased_action = int(np.argmax(drive_bias[:4]))
+                if drive_bias[biased_action] > 0.3:
+                    action = biased_action
+            
+            # 好奇/无聊驱动→随机探索（始终有机会探索，但不覆盖生存需求）
+            if self.drives.hunger < 0.2 and self.drives.thirst < 0.3:
+                if (self.drives.curiosity > 0.3 or self.drives.boredom > 0.2) and not self.body.is_critical():
+                    if np.random.random() < 0.4:
+                        action = np.random.randint(0, 4)
+            
+            # 睡眠动作（睡眠优先于一切）
+            if drive_bias[4] > 0.7 and (self.drives.fatigue_drive < 0.2 or self.body.energy < 0.3):
+                pass  # 能量低时即使疲劳也不睡
+            elif drive_bias[4] > 0.7 and self.body.energy > 0.5:
+                action = 4
+        # 睡眠动作（睡眠是状态，不是动作）
+        if self.body.is_sleeping:
+            action = 0  # 睡眠时动作无关，自模型会处理恢复
+        
+        # ─── 7b. 元认知重定向
+        if not self.body.is_sleeping and len(obs) >= 4:
+            ate_recently = hasattr(self, '_food_recently_tick') and (self.tick - self._food_recently_tick) < 30
+            near_primary = len(obs) >= 2 and abs(obs[0]) < 0.08 and abs(obs[1]) < 0.08
+            # 检测主要目标是否是"假"的（站在目标上但没获得能量）
+            fake_primary = near_primary and len(obs) >= 5 and obs[4] < 0.5
+            if self.body.energy < 0.95 and not ate_recently and (not near_primary or fake_primary):
+                sx, sy = obs[2], obs[3]
+                secondary_reached = abs(sx) < 0.05 and abs(sy) < 0.05
+                if not secondary_reached:
+                    if abs(sx) > abs(sy):
+                        action = 3 if sx > 0 else 2
+                    elif abs(sy) > 0.05:
+                        action = 4 if sy > 0 else 1
+        
+        # ─── 8. 行动 ───
+        # 行动前记录位置（用于被动位移检测）
+        pos_before_action = tuple(self.pos) if hasattr(self, 'pos') else None
+        
+        if self.env:
+            result = self.env.step(action)
+            if isinstance(result, dict):
+                env_energy = result.get("energy_delta", 0)
+                env_water = result.get("water_delta", 0)
+                if abs(env_energy) > 0.001:
+                    self.body.energy = np.clip(self.body.energy + env_energy, 0, 2)
+                    # 获取到正回报 → 清除元认知覆盖 + 标记最近吃饱了
+                    if env_energy > 0.01:
+                        self.override_action = -1
+                        self._food_recently_tick = self.tick
+                if abs(env_water) > 0.001:
+                    self.body.water = np.clip(self.body.water + env_water, 0, 1)
+        
+        # 被动位移检测：行动后位置与预期不符
+        was_moved = False
+        if pos_before_action is not None:
+            pos_after = tuple(self.pos)
+            # 计算预期位置（动态获取边界）
+            size = getattr(self.env, 'size', 10)
+            dirs = [(0,0),(0,-1),(-1,0),(1,0),(0,1)]
+            if action < 5:
+                edx, edy = dirs[action]
+                expected = (max(0, min(size-1, pos_before_action[0] + edx)),
+                            max(0, min(size-1, pos_before_action[1] + edy)))
+                if pos_after != expected:
+                    was_moved = True
+        if was_moved:
+            self._pending_was_moved = True
+        
+        # ─── 9. 空间记忆更新 ───
+        food_nearby = hasattr(self.env, 'food_nearby') and self.env.food_nearby()
+        water_nearby = hasattr(self.env, 'water_nearby') and self.env.water_nearby() if hasattr(self.env, 'water_nearby') else False
+        self.spatial_memory.update_position(
+            tuple(self.pos),
+            energy_delta=energy_delta,
+            surprise=surprise,
+            danger=danger_nearby,
+            food_nearby=food_nearby,
+            water_nearby=water_nearby,
+        )
+        self.spatial_memory.tick_aging(decay=0.001)
+        
+        # ─── 10. 经验缓存（用于睡眠巩固） ───
+        self.replay_buffer.append({
+            "pos": self.pos,
+            "action": action,
+            "surprise": surprise,
+            "health": self.body.health,
+            "drive": dominant_drive,
+        })
+        if len(self.replay_buffer) > self.max_replay:
+            self.replay_buffer.pop(0)
+        
+        # ─── 10b. 他者模型更新（自我-他者对比） ───
+        self.other_model.record_self_action(action, tuple(self.pos), dominant_drive)
+        divergence = self.other_model.update()
+        
+        # ─── 11. 紧急检测 ───
+        self.survival_ticks += 1
+        # 睡眠额外恢复（只有真正进入睡眠状态才恢复）
+        if self.body.is_sleeping:
+            self.body.energy = min(2.0, self.body.energy + 0.003)
+            self.body.water = min(1.0, self.body.water + 0.001)
+        self.peak_health = max(self.peak_health, self.body.health)
+        
+        if self.body.health <= 0.0 or self.body.energy <= 0.0:
+            self.alive = False
+        
+        # ─── 记录 ───
+        self.last_action = action
+        
+        return {
+            "tick": self.tick,
+            "health": self.body.health,
+            "energy": self.body.energy,
+            "drive": dominant_drive,
+            "surprise": surprise,
+            "action": action,
+            "sleeping": int(self.body.is_sleeping),
+            "fatigue": self.body.fatigue,
+        }
+    
+    def run(self, max_ticks: int = None):
+        print("[AGI] 生物模拟启动", flush=True)
+        start = time.time()
+        
+        while self.alive:
+            status = self.step()
+            
+            if self.tick % 500 == 0:
+                h = status["health"]
+                e = status["energy"]
+                d = status["drive"]
+                s = status["sleeping"]
+                f = status["fatigue"]
+                print(f"  T{self.tick:5d} | H:{h:.2f} E:{e:.2f} "
+                      f"驱:{d} 眠:{s} 疲:{f:.2f}", flush=True)
+            
+            if max_ticks and self.tick >= max_ticks:
+                break
+        
+        elapsed = time.time() - start
+        mem = len(self.spatial_memory.nodes)
+        print(f"[AGI] 结束. {elapsed:.0f}s, {self.tick} ticks, "
+              f"记忆地图: {mem} 节点", flush=True)
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="AGI - 生物模拟")
+    parser.add_argument("--ticks", type=int, default=5000)
+    parser.add_argument("--maze", type=int, default=0, help="迷宫尺寸（如8=8x8），默认0=自由环境")
+    parser.add_argument("--size", type=int, default=8, help="迷宫尺寸")
+    args = parser.parse_args()
+    
+    from cognition import CognitionPipeline
+    cfg = {"input_dim": 4, "self_state_dim": 14, "hidden_dim": 64, "n_actions": 5, "n_strategies": 4}
+    
+    agi = AGI()
+    agi.set_cognition(CognitionPipeline(cfg))
+    
+    if args.maze > 0:
+        class MazeAdapter:
+            """迷宫→生物环境适配器"""
+            def __init__(self, size):
+                import sys
+                sys.path.insert(0, r"D:\编程\game\brain001")
+                from maze_env import Maze
+                self.maze = Maze(size=size)
+                self.size = size
+                # 起点放在迷宫中央附近而不是角落
+                cx, cy = size // 2, size // 2
+                for y in range(max(1, cy-2), min(size, cy+3)):
+                    for x in range(max(1, cx-2), min(size, cx+3)):
+                        if self.maze.grid[y][x] == 0:
+                            self.pos = [x, y]
+                            break
+                    else:
+                        continue
+                    break
+                self.goal = list(self.maze.goal)
+                self.visited_before = set()
+                self.visited_before.add(tuple(self.pos))
+            
+            def get_pos(self):
+                return self.pos
+            
+            def observe(self):
+                x, y = self.pos
+                gx, gy = self.maze.goal
+                def w(dx, dy):
+                    nx, ny = x+dx, y+dy
+                    if 0<=nx<self.size and 0<=ny<self.size:
+                        return float(self.maze.grid[ny][nx])
+                    return 1.0
+                return np.array([w(0,-1), w(-1,0), w(1,0), w(0,1)])
+            
+            def step(self, action):
+                if action == 4:  # sleep
+                    return {"energy_delta": -0.0005, "water_delta": -0.0001}
+                
+                dirs = [(0,0),(0,-1),(-1,0),(1,0),(0,1)]
+                dx, dy = dirs[action % 5]
+                nx, ny = self.pos[0]+dx, self.pos[1]+dy
+                
+                # 撞墙检测
+                if (nx, ny) != tuple(self.pos):
+                    x, y = nx, ny
+                    if 0 <= x < self.size and 0 <= y < self.size and self.maze.grid[y][x] == 0:
+                        self.pos = [nx, ny]
+                    else:
+                        return {"energy_delta": -0.001, "water_delta": -0.0003}
+                else:
+                    return {"energy_delta": -0.0005, "water_delta": -0.0001}
+                
+                self.maze.agent_pos = tuple(self.pos)
+                
+                # 到达目标 = 大量能量
+                at_goal = tuple(self.pos) == self.maze.goal
+                exploring = tuple(self.pos) not in self.visited_before
+                self.visited_before.add(tuple(self.pos))
+                
+                energy = 0.2 if at_goal else (0.02 if exploring else -0.001)
+                water = 0.05 if at_goal else -0.0005
+                return {"energy_delta": energy, "water_delta": water}
+            
+            def food_nearby(self):
+                return tuple(self.pos) == self.maze.goal
+        
+        print(f"[AGI] 连接迷宫 {args.maze}x{args.maze}", flush=True)
+        agi.set_env(MazeAdapter(args.maze))
+    else:
+        # 自由环境
+        class BioEnv:
+            def __init__(self):
+                self.pos = [5, 5]
+                self.food = [[2, 2], [7, 8], [3, 6]]
+                self.water = [[8, 1], [1, 8]]
+                self.tick = 0
+            
+            def get_pos(self):
+                return self.pos
+            
+            def observe(self):
+                dxs = [f[0]-self.pos[0] for f in self.food]
+                dys = [f[1]-self.pos[1] for f in self.food]
+                nearest_food = min(range(len(self.food)), key=lambda i: abs(dxs[i])+abs(dys[i]))
+                dx = dxs[nearest_food]/10; dy = dys[nearest_food]/10
+                return np.array([dx, dy, 0.0, 0.0])
+            
+            def step(self, action):
+                if action == 4:  # sleep
+                    return {"energy_delta": 0.0}
+                dxs = [(0,0),(0,-1),(-1,0),(1,0),(0,0)]
+                dx, dy = dxs[action % 5]
+                self.pos[0] = max(0, min(9, self.pos[0] + dx))
+                self.pos[1] = max(0, min(9, self.pos[1] + dy))
+                self.tick += 1
+                eat = any(abs(self.pos[0]-f[0])+abs(self.pos[1]-f[1]) < 2 for f in self.food)
+                drink = any(abs(self.pos[0]-w[0])+abs(self.pos[1]-w[1]) < 2 for w in self.water)
+                return {"energy_delta": 0.15 if eat else (0.05 if drink else -0.001),
+                        "water_delta": 0.1 if drink else -0.0003}
+            
+            def get_energy_delta(self, action):
+                return 0.0
+            
+            def food_nearby(self):
+                return any(abs(self.pos[0]-f[0])+abs(self.pos[1]-f[1]) < 4 for f in self.food)
+        
+        agi.set_env(BioEnv())
+    
+    agi.run(max_ticks=args.ticks)
+
+
+if __name__ == "__main__":
+    main()

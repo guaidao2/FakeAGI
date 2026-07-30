@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pth
+*.pt
+*.pth
+checkpoint_*.pth
+*.egg-info/
+.DS_Store
+Thumbs.db
+debug_out.txt
+env/
+gamenet/
+interface/
+test_results.md
+test_results.txt
