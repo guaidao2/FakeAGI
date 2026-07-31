@@ -63,7 +63,6 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
         except Exception as e:
             print(f"[PERSIST] cognition 保存失败: {e}")
 
-    # 1b. MoE 专家路由（P1）
     # 1b. MoE 专家路由（P1）— 确保已创建（延迟创建可能还没触发）
     if getattr(agi, 'moe', None) is not None:
         try:
@@ -201,6 +200,10 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             # 确保 state_dim 匹配保存时的维度
             if g.state_dim < saved_hidden:
                 g.grow_state_dim(saved_hidden)
+            # 校验 q_nets 数量（策略数不一致时显式告警，不静默截断）
+            if len(g.q_nets) != len(gm["q_nets"]):
+                print(f"[PERSIST] GameNN 策略数不匹配: "
+                      f"保存 {len(gm['q_nets'])} vs 当前 {len(g.q_nets)}", flush=True)
             for q, sd in zip(g.q_nets, gm["q_nets"]):
                 q.load_state_dict(sd)
             g.strategy_weights = gm["strategy_weights"]

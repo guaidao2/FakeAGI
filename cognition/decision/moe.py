@@ -210,6 +210,8 @@ class MoERouter:
     def get_state_dict(self) -> dict:
         """序列化（供 checkpoint 持久化）"""
         return {
+            "state_dim": self.state_dim,
+            "n_actions": self.n_actions,
             "experts": [
                 {
                     "id": e.id,
@@ -227,15 +229,23 @@ class MoERouter:
         }
 
     def load_state_dict(self, sd: dict):
-        """反序列化"""
+        """反序列化（校验维度一致性，不一致则显式告警）"""
+        saved_state_dim = sd.get("state_dim", self.state_dim)
+        if saved_state_dim != self.state_dim:
+            print(f"[MoE] 维度不匹配: 保存 state_dim={saved_state_dim} "
+                  f"vs 当前 {self.state_dim} — 专家网络将按当前维度重建", flush=True)
         self.experts = []
         self.next_id = sd["next_id"]
         self.tick = sd["tick"]
         for es in sd["experts"]:
             e = Expert(es["id"], np.array(es["prototype"]),
-                       self.state_dim, self.n_actions,
+                       saved_state_dim, sd.get("n_actions", self.n_actions),
                        created_tick=es["created_tick"])
-            e.net.load_state_dict(es["net"])
+            if saved_state_dim == self.state_dim:
+                try:
+                    e.net.load_state_dict(es["net"])
+                except Exception as ex:
+                    print(f"[MoE] 专家 #{e.id} 权重恢复失败: {ex}", flush=True)
             e.last_active_tick = es["last_active_tick"]
             e.activation_count = es["activation_count"]
             e.prediction_error = es["prediction_error"]
