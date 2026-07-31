@@ -333,7 +333,6 @@ class AGI:
         recently_fed = (self.tick - self._food_recently_tick) < 30
         has_signal = recently_fed or self._goal_has_resource_direction(obs)
         self._goal_info = self.goal_state.update(has_resource_signal=has_signal)
-        goal_gap = self.goal_state.gap
         exploration_intent = self.goal_state.exploration_intent
         
         # ─── 7. 认知处理 ───
