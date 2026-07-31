@@ -152,11 +152,10 @@ class AGI:
                 print(f"[GROWTH] 协调生长 #{self.growth.growth_events} "
                       f"(obs_growth): obs {self._last_abstract_dim}→{abs_dim}D", flush=True)
             self.growth.sync_to(target, source="obs_growth")
-            # 同步 MoE state_dim（若已创建）
-            if self.moe is not None and self.moe.state_dim < target:
-                old_sd = self.moe.state_dim
-                self.moe.state_dim = min(32, max(8, target))
-                print(f"[GROWTH] MoE state_dim {old_sd}→{self.moe.state_dim}", flush=True)
+            # MoE 维度协调：记录到协调器（不直接改 state_dim，避免破坏已有专家）
+            if self.moe is not None:
+                print(f"[GROWTH] MoE 需协调: 当前 state_dim={self.moe.state_dim}, "
+                      f"目标 >= {target}（新专家创建时自动适配）", flush=True)
         self._last_abstract_dim = abs_dim
     
     def _moe_state_vector(self) -> np.ndarray:

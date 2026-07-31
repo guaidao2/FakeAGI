@@ -35,21 +35,26 @@ class FeatureChannel:
         vals = [raw_obs[i] for i in self.indices if i < len(raw_obs)]
         if not vals:
             return np.zeros(self.dim, dtype=np.float32)
-        if self.transform == "abs":
-            out = np.mean(np.abs(vals))
+        if self.transform == "identity":
+            # identity 保留每个原始值（不压缩）——方向/观测语义不能均值化
+            out = np.array(vals, dtype=np.float32)
+            self.dim = len(vals)
+        elif self.transform == "abs":
+            out = np.array([np.mean(np.abs(vals))], dtype=np.float32)
         elif self.transform == "square":
-            out = np.mean(np.square(vals))
+            out = np.array([np.mean(np.square(vals))], dtype=np.float32)
         elif self.transform == "norm":
-            out = np.linalg.norm(vals)
-        else:  # identity
-            out = np.mean(vals)
-        # 信息增益跟踪（滚动方差）
-        self.history.append(float(out))
+            out = np.array([np.linalg.norm(vals)], dtype=np.float32)
+        else:
+            out = np.array([np.mean(vals)], dtype=np.float32)
+        # 信息增益跟踪（滚动方差，标量化）
+        scalar = float(np.mean(out))
+        self.history.append(scalar)
         if len(self.history) > 50:
             self.history.pop(0)
         if len(self.history) >= 10:
             self.information_gain = float(np.var(self.history))
-        return np.array([out], dtype=np.float32)
+        return out
 
 
 class ObservationAbstraction:
