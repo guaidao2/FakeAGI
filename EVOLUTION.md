@@ -1,9 +1,13 @@
 # EVOLUTION — 进化架构设计：MoE 专家路由 + 经验 DNA 跨代
 
-> 状态：**部分实现**（2025-07-31）
+> 状态：**部分实现**（2025-08-01）
 > - ✅ P1 MoE 专家路由：已实现（`cognition/decision/moe_router.py`，`test_moe.py` 通过）
+> - ✅ P2 经验 DNA：已实现（`core/dna.py`）
+> - ✅ P3 种群演化：已实现（`test_evolution.py`）
+> - ✅ P4 叠加态世界模型：已实现（`cognition/temporal/superposition_world.py`）
 > - ✅ P6 器官生长：已实现（`cognition/perception/`，`test_organ_gen.py` 通过）
-> - ⏳ 经验 DNA 跨代（后代模式）：设计定稿，待实现
+> - ✅ P7/P8a/P8b 语言：接地/生存/意图已实现（`cognition/language/`）
+> - ⏳ P8c 句法：待实现
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
@@ -198,8 +202,8 @@ session 结束（死亡/主动保存）
 - [x] **P6：感知器官生长**（`cognition/perception/`）— 高维输入自动长出感知器官（超量生成→竞争选择→结构生长），`test_organ_gen.py` 通过
 - [x] **P7：语言接口 / 符号接地**（`cognition/language/`）— 语言器官（理解+说话，词义=预测收益），`test_language.py` 通过；设计见 `DESIGN_LANGUAGE.md`
 - [x] **P8a：语言生存压力**（`test_language_survival.py`）— 食物方向隐藏环境，可信度驱动语言使用（强化/坍缩/试探），对照组饿死 vs 语言组存活 4.3 倍
+- [x] **P8b：语言即行为**（`test_language_intent.py`）— 需求驱动主动说话（`AGI.speak()`）+ 意图优先仲裁（指令加成压过反射），会说满存活 vs 不会说饿死（L4 意图）
 - [ ] P3b：多实例并行（当前串行，可并行化）
-- [ ] P8b：语言即行为（说"water"环境响应）→ L4 意图
 - [ ] P8c：句法/语法层 + 长文本生成
 
 验证：
@@ -210,5 +214,6 @@ session 结束（死亡/主动保存）
 - `python test_organ_gen.py` — 器官生长 ✅
 - `python test_language.py` — 语言接地 ✅
 - `python test_language_survival.py` — 语言生存压力 ✅
+- `python test_language_intent.py` — 语言意图 ✅
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 

@@ -131,6 +131,7 @@ agi/
 - **P6 感知器官生长**：高维输入自动长出感知器官 —— 超量生成 3 候选 → 竞争期候选输出真实替换观测流（世界模型误差=感知质量）→ 最优保留其余凋亡 → 成熟器官可复制/变异/修剪（结构级生长，不只是扩维）
 - **语言器官（符号接地）**：词的意义=预测收益 —— token 嵌入 → 语言向量拼入观测 → 接地训练（词→状态）→ 说话（内部状态→词，`word_probe`）。默认关闭，`config.language=True` 开启
 - **语言生存压力（P8a）**：可信度驱动的语言使用（`_language_trust` 强化/坍缩/试探）——当语言成为生存必要通道（食物方向隐藏）时系统真正理解语义（对照组饿死 vs 语言组存活 4.3 倍）
+- **语言意图（P8b）**：主动说话（`AGI.speak()` 需求驱动：说话概率=需求×信任）+ 意图优先仲裁（指令加成压过反射）——系统用语言达成目的（会说满存活 vs 不会说饿死）
 - **生长**：增量式神经元生长（每次 +8，稀疏突触连接，tau/encoder/bias 权重迁移），输入维度自动扩展
 - **元认知**：知识缺口检测 + 探索目标生成 + 反射压制 + 学习策略切换
 - **价值进化**：核心价值（存续优先）不可变，次级价值（好/坏判断）由经验调整
@@ -159,9 +160,10 @@ agi/
 | E7 叠加态坍缩 | ✅ 通过（分支 3→5、熵 1.57→0.28） |
 | E8 器官生长 | ✅ 通过（64D 像素流 t=36 找食物） |
 | E9 语言接地 | ✅ 通过（理解 0.405 vs 0.525、说话 40%） |
-| E10 语言生存压力 | ✅ 通过（对照组 213tick 饿死 vs 语言组 916tick/30.2 食物） |
+| E10 语言生存压力 | ✅ 通过（对照组 213tick 饿死 vs 语言组满存活/143.2 食物） |
+| E11 语言意图 | ✅ 通过（会说 2000tick/24.6 食物 vs 不会说 241tick/0.4，需求驱动说话） |
 
-运行：`python test_experimentN.py` / `python test_superposition.py` / `python test_organ_gen.py` / `python test_language.py` / `python test_language_survival.py`
+运行：`python test_experimentN.py` / `python test_superposition.py` / `python test_organ_gen.py` / `python test_language.py` / `python test_language_survival.py` / `python test_language_intent.py`
 
 ## License
 
