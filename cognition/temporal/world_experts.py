@@ -112,8 +112,11 @@ class MultiExpertWorldModel(nn.Module):
     def grow(self, new_dim: int):
         """生长时扩展（与 WorldModel.grow 类似，重建 heads）"""
         old_act_w = self.action_embed.weight.data.clone().cpu()
-        old_heads = [h.net[0].weight.data.clone().cpu() for h in self.heads]
-        old_heads_b = [h.net[0].bias.data.clone().cpu() for h in self.heads]
+        # 保存 net[0] 和 net[2]（两层都迁移，不只第一层）
+        old_heads_1w = [h.net[0].weight.data.clone().cpu() for h in self.heads]
+        old_heads_1b = [h.net[0].bias.data.clone().cpu() for h in self.heads]
+        old_heads_2w = [h.net[2].weight.data.clone().cpu() for h in self.heads]
+        old_heads_2b = [h.net[2].bias.data.clone().cpu() for h in self.heads]
 
         self.input_dim = new_dim
         self.feat_dim = new_dim + new_dim // 4
@@ -125,13 +128,22 @@ class MultiExpertWorldModel(nn.Module):
             h_act = min(old_act_w.shape[1], new_dim // 4)
             self.action_embed.weight[:, :h_act] = old_act_w[:, :h_act]
             for i, h in enumerate(self.heads):
-                old_w = old_heads[i]
-                h_old = old_w.shape[0]
-                h.net[0].weight[:h_old, :h_old] = old_w[:, :h_old]
-                h.net[0].bias[:h_old] = old_heads_b[i][:h_old]
+                # net[0]: 输入层（new_dim → new_dim），迁移左上角
+                old_w1 = old_heads_1w[i]
+                h_old1 = old_w1.shape[0]
+                h.net[0].weight[:h_old1, :h_old1] = old_w1[:, :h_old1]
+                h.net[0].bias[:h_old1] = old_heads_1b[i][:h_old1]
+                # net[2]: 输出层（new_dim → new_dim），同样迁移左上角
+                old_w2 = old_heads_2w[i]
+                h_old2 = old_w2.shape[0]
+                h.net[2].weight[:h_old2, :h_old2] = old_w2[:, :h_old2]
+                h.net[2].bias[:h_old2] = old_heads_2b[i][:h_old2]
+
+        # 重建 optimizer（旧 optimizer 引用已废弃的参数张量，训练梯度会落空）
+        self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
 
     def get_state_dict(self) -> dict:
         return self.state_dict()
 
-    def load_state_dict(self, sd: dict):
-        super().load_state_dict(sd)
+    def load_state_dict(self, sd: dict, strict: bool = True):
+        super().load_state_dict(sd, strict=strict)

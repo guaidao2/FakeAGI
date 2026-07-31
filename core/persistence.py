@@ -188,7 +188,11 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
                     while len(agi.cognition.expert_world.heads) < n_saved:
                         agi.cognition.expert_world.heads.append(
                             ExpertWorldHead(agi.cognition.expert_world.input_dim))
-                    agi.cognition.expert_world.load_state_dict(ew_sd)
+                    # strict=False：容忍跨版本 extra/missing keys，失败时显式告警
+                    try:
+                        agi.cognition.expert_world.load_state_dict(ew_sd, strict=False)
+                    except Exception as e:
+                        print(f"[PERSIST] expert_world 加载告警: {e}")
                 except Exception as e:
                     print(f"[PERSIST] expert_world 恢复失败: {e}")
             # GameNN 手动恢复
