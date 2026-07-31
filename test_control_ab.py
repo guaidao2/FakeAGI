@@ -201,18 +201,51 @@ def run_rl(env_factory, max_ticks=3000, seed=0):
     torch.manual_seed(seed)
     env = env_factory()
     agent = RLAgent(state_dim=len(env.observe()), n_actions=5, seed=seed)
+    # 镜像能量结算：与 FakeAGI 相同（energy 1.0 起，代谢=env.get_energy_delta）
+    energy = 1.0
     success_at = None
+    died_at = None
     for t in range(max_ticks):
         obs = env.observe()
         a = agent.act(obs)
         result = env.step(a)
-        reward = 1.0 if result["energy_delta"] > 0.1 else -0.01
+        # 能量结算（与 FakeAGI body 一致：env 返回的 energy_delta）
+        ed = result["energy_delta"]
+        if abs(ed) > 0.001:
+            energy = max(0.0, min(2.0, energy + ed))
+        reward = 1.0 if ed > 0.1 else -0.01
         done = False
+        if energy <= 0.0:   # 饿死（与 FakeAGI 相同终止条件）
+            done = True
+            died_at = t
+            break
         agent.learn(obs, a, reward, env.observe(), done)
         if env.eaten > 0 and success_at is None:
             success_at = t
     return {"success_at": success_at, "eaten": env.eaten,
-            "alive": True, "survived": t}
+            "alive": died_at is None, "survived": t, "died_at": died_at}
+
+
+# ═══ 随机基线（碰巧解锁/觅食的概率对照）═══
+
+def run_random(env_factory, max_ticks=3000, seed=0):
+    """随机游走：无学习，仅测环境碰巧成功的概率"""
+    np.random.seed(seed)
+    env = env_factory()
+    energy = 1.0
+    success_at = None
+    for t in range(max_ticks):
+        a = np.random.randint(0, 5)
+        result = env.step(a)
+        ed = result["energy_delta"]
+        if abs(ed) > 0.001:
+            energy = max(0.0, min(2.0, energy + ed))
+        if energy <= 0.0:
+            break
+        if env.eaten > 0 and success_at is None:
+            success_at = t
+    return {"success_at": success_at, "eaten": env.eaten,
+            "alive": energy > 0, "survived": t}
 
 
 def compare(name, env_factory, seeds=3):
@@ -224,7 +257,9 @@ def compare(name, env_factory, seeds=3):
         fake_results.append(fr)
         rl_results.append(rr)
         print(f"  seed={s} | FakeAGI: 成功t={fr['success_at']} 食物={fr['eaten']} "
-              f"| RL: 成功t={rr['success_at']} 食物={rr['eaten']}", flush=True)
+              f"存活={fr['survived']} alive={fr['alive']} "
+              f"| RL: 成功t={rr['success_at']} 食物={rr['eaten']} "
+              f"存活={rr['survived']} alive={rr['alive']}", flush=True)
     f_succ = sum(1 for r in fake_results if r["success_at"] is not None)
     r_succ = sum(1 for r in rl_results if r["success_at"] is not None)
     f_food = np.mean([r["eaten"] for r in fake_results])
@@ -297,6 +332,17 @@ def test():
     r1 = compare("S1 简单环境（食物直接可见）", SimpleEnv)
     r2 = compare("S2 因果环境（食物方向隐藏+开关在路径外）", CausalEnv)
 
+    # 随机基线（S2：碰巧解锁/觅食概率）
+    print(f"\n── 随机基线（无学习）──", flush=True)
+    rand_results = []
+    for s in range(3):
+        rr = run_random(CausalEnv, seed=s)
+        rand_results.append(rr)
+        print(f"  seed={s} | 随机: 成功t={rr['success_at']} 食物={rr['eaten']} "
+              f"存活={rr['survived']} alive={rr['alive']}", flush=True)
+    rand_food = np.mean([r["eaten"] for r in rand_results])
+    print(f"  随机基线 S2 食物均值: {rand_food:.1f}", flush=True)
+
     print(f"\n── S3 规则变化（水源移动，镜像压力）──", flush=True)
     f_adapt, r_adapt = [], []
     for s in range(3):
@@ -312,16 +358,13 @@ def test():
 
     print(f"\n── 汇总（初步观察，非定论）──", flush=True)
     print(f"  S1 简单: FakeAGI 食物 {r1['f_food']:.1f} vs RL {r1['r_food']:.1f}", flush=True)
-    print(f"  S2 因果: FakeAGI 食物 {r2['f_food']:.1f} vs RL {r2['r_food']:.1f}", flush=True)
+    print(f"  S2 因果: FakeAGI 食物 {r2['f_food']:.1f} vs RL {r2['r_food']:.1f} "
+          f"(随机基线 {rand_food:.1f})", flush=True)
     print(f"  S3 变化: FakeAGI 适应 {r3['f_succ']}/3 vs RL {r3['r_succ']}/3", flush=True)
-    # 初步观察判定（诚实报告，不偏向）
-    s2_observe = r2["f_food"] >= r2["r_food"]
-    print(f"\n  初步观察: S2 因果环境（食物方向隐藏）FakeAGI ≥ 现代 RL: "
-          f"{'成立' if s2_observe else '不成立——RL 更优'}（信息隐藏下预测误差无引导）", flush=True)
-    print(f"  科学意义: 修正设计后结论反转——公理④ 在此配置下未获支持，", flush=True)
-    print(f"  需消融（RL+解锁奖励 / FakeAGI 去反射+加食物线索）才能归因", flush=True)
-    # 诚实判定：如实报告观察结果（无论哪个方向）
-    print(f"  判定: 对照实验完成，结果如实记录（{'FakeAGI 优' if s2_observe else 'RL 优'}）", flush=True)
+    print(f"  注意: 需对比存活 tick（死亡时间差是主要混淆变量）", flush=True)
+    print(f"  归因: 差异可能来自学习范式 OR 存活时长 OR 信息可用性——", flush=True)
+    print(f"  需消融实验（RL+解锁奖励 / FakeAGI 去反射+加食物线索）才能区分", flush=True)
+    print(f"  判定: 对照实验完成，结果如实记录（不做公理判定）", flush=True)
     return 0
 
 
