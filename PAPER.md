@@ -222,9 +222,20 @@ FakeAGI 架构是一个三层耦合循环：自我层 → 认知层 → 物理�
 
 基于博弈论的策略矩阵。每个策略头独立学习 Q 函数，通过博弈矩阵选择最优策略。支持置信度驱动的策略权重更新和 ε-贪心探索。GameNN 核心实现见 [GameNN-WorldModel](https://github.com/guaidao2/GameNN-WorldModel)。
 
+#### 人脑式决策委员会 (Decision Committee)
+
+决策不再由单一模块顺序覆盖，而是模仿人脑的并行决策系统竞争 + 前额叶执行控制：
+- **反射/本能**：硬接线方向映射（obs 直接驱动）
+- **边缘系统**：驱动力偏置投票（饥饿→觅食）
+- **习惯**：GameNN Q 值概率（快速、自动化）
+- **规划**：前瞻模拟评分（慢、灵活）
+- **元认知**：知识缺口重定向
+
+每个决策者对每个动作投票，按情境权重加权求和后 argmax。冲突检测：前两名得分接近 → 深思模式（提升规划权重）；危急（健康低+高应激）→ 恐慌模式（反射/边缘主导）。
+
 #### 生长引擎 (Growth)
 
-当损失函数在长窗口内不再下降时，系统自动扩展隐藏层维度。扩展策略：hidden_dim ← hidden_dim × 1.2。旧权重通过剪裁复制保留。支持输入维度生长（感知维度变化时自动扩展编码器）。生长架构独立实验见 [Growing-LLM](https://github.com/guaidao2/Growing-LLM) 和原版 [GameNN-WorldModel](https://github.com/guaidao2/GameNN-WorldModel)。
+增量式神经元生长（模仿海马体新生）：每次只增加 8 个神经元，而非批量 ×1.2。新神经元稀疏连接（仅随机连接 ~20% 旧神经元），旧神经元权重完整迁移（encoder/output_layer 的 weight+bias、LTC 的 W_x/W_h、tau_net 按 x/h 分段迁移），保持时序动力学连续。支持输入维度生长（感知维度变化时自动扩展编码器）。生长架构独立实验见 [Growing-LLM](https://github.com/guaidao2/Growing-LLM) 和原版 [GameNN-WorldModel](https://github.com/guaidao2/GameNN-WorldModel)。
 
 #### 元认知层 (Meta-cognition)
 
@@ -238,33 +249,38 @@ FakeAGI 架构是一个三层耦合循环：自我层 → 认知层 → 物理�
 
 ```
 def step():
-    # 1. 感知
+    # 1. 感知 + 注意力门控 + 物理先验
     obs = env.observe()
+    obs = attention_gate(obs, drives)
     body_state = body.update(energy_delta, water_delta, ...)
     
     # 2. 驱动力更新
     drives.update(body_state, survival_prob, surprise)
     
     # 3. 认知处理
-    self_state = concat(body_vec, drive_vec)
+    self_state = concat(body_vec, drive_vec, latent_ctx)
     action, info = cognition.process(obs, self_state, exploration)
     
-    # 4. 反射抑制决策
-    if confidence > threshold:
-        suppress_reflex = True
+    # 4. 人脑式决策委员会（5 决策者并行投票 + 加权仲裁）
+    reflex_v = committee.reflex_vote(obs, drives)
+    limbic_v = committee.limbic_vote(drive_bias)
+    habit_v  = committee.habit_vote(gamenn_probs)
+    plan_v   = committee.plan_vote(planner_scores)
+    meta_v   = committee.meta_vote(metacognition_override)
+    action = committee.decide({reflex, limbic, habit, plan, meta},
+                              health, stress, confidence, energy)
     
-    # 5. 元认知干预
-    cognitive action ← metacognition.override(action, gap_detected)
+    # 5. 元认知干预（知识缺口 → 重定向）
+    action ← metacognition.override(action, gap_detected)
     
     # 6. 执行
     env.step(action)
     
-    # 7. 在线学习
-    experience ← (prev_hidden, action, new_hidden)
-    replay_buffer.append(experience)
-    cognition.learn(replay_buffer.sample())
+    # 7. 在线学习（TD 误差 + 能量奖励）
+    gamenn.learn(reward, next_state)
+    world_model.train_step(prev_hidden, new_hidden, action)
     
-    # 8. 生长检测
+    # 8. 增量生长检测（每次 +8 神经元）
     if loss_plateau_detected() and capacity_available():
         cognition._check_growth()
 ```

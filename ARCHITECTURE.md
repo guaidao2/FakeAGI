@@ -34,85 +34,67 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 模块设计
+## 模块设计（当前实际结构）
 
 ```
 agi/
 ├── core/                    # 自我层 — 持久存在的"我"
-│   ├── __init__.py
-│   ├── self_model.py        # 自模型：存在概率、内部状态追踪
-│   ├── curiosity.py         # 好奇心预算分配
-│   ├── value_system.py      # 价值系统：好/坏/安全/危险判断
-│   └── homeostasis.py       # 稳态维持：关键变量监控
+│   ├── body.py              # 身体模型：6维稳态（能量/水分/结构/温度/疲劳/压力）+昼夜节律
+│   ├── drives.py            # 驱动力系统：6驱动力（饥饿/口渴/恐惧/疲劳/好奇/无聊）竞争
+│   ├── self_model.py        # 自模型：存在概率、状态历史、好奇心预算
+│   ├── value_system.py      # 可进化价值系统：核心不可变 + 次级经验可调
+│   ├── homeostasis.py       # 稳态维持：关键变量监控
+│   └── physics_intuition.py # 物理直觉：重力/碰撞/连续/动量/无瞬移先验（贝叶斯修正）
 │
 ├── cognition/               # 认知层 — 感知+推理+决策
-│   ├── __init__.py
-│   ├── encoder/             # 多模态编码
-│   │   ├── __init__.py
-│   │   ├── continuous.py    # 连续编码 (CNN/MLP → LNN空间)
-│   │   ├── discrete.py      # 离散编码 (状态→符号)
-│   │   └── fusion.py        # 融合层 (连续+离散耦合)
-│   │
+│   ├── __init__.py          # 认知管线：LNN+世界模型+GameNN+生长检测+误差通路
 │   ├── temporal/            # 时序推理
-│   │   ├── __init__.py
-│   │   ├── lnn.py           # LNN核心 (LTCell)
+│   │   ├── lnn.py           # LNN核心 (LTCell)，增量生长+稀疏突触+tau迁移
 │   │   ├── tau_adapt.py     # τ自适应调度
-│   │   └── world_model.py   # 世界模型：预测+惊奇
+│   │   └── world_model.py   # 条件世界模型：hidden+action→next，感知/行动双通路
 │   │
-│   ├── decision/            # 多策略决策
-│   │   ├── __init__.py
-│   │   ├── gamenn.py        # GameNN策略矩阵
-│   │   ├── strategies.py    # 策略头群
-│   │   └── selector.py      # 策略选择器（含探索预算）
+│   ├── decision/            # 决策
+│   │   ├── gamenn.py        # GameNN多策略博弈（Q网络+策略权重+TD学习）
+│   │   └── committee.py     # 人脑式决策委员会：5决策者并行投票+加权仲裁
 │   │
-│   ├── imagination/         # 反事实通道
-│   │   ├── __init__.py
-│   │   ├── counterfactual.py# 反事实轨迹生成
-│   │   ├── dream.py         # 梦境巩固（离线重放+变异）
-│   │   └── replay.py        # 经验缓存（含想象经验）
+│   ├── metacognition/       # 第五层认知
+│   │   ├── core.py          # 元认知层：缺口检测→目标生成→override
+│   │   ├── __init__.py      # GapDetector（快速失败/世界模型/策略/因果缺口）
+│   │   ├── goal_gen.py      # 探索目标生成器
+│   │   ├── scheduler.py     # 好奇心调度器
+│   │   ├── assess.py        # 自我评估
+│   │   └── strategy_manager.py # 元-元认知：学习策略切换（default/explore/replay/grow/rest）
 │   │
-│   └── learning/            # 学习机制
-│       ├── __init__.py
-│       ├── surprise.py      # 惊奇计算
-│       ├── hebbian.py       # 赫布在线学习
-│       └── consolidation.py # 经验巩固（睡眠）
+│   ├── planner.py           # 规划：BFS前瞻模拟（world model 滚动）
+│   ├── imagination_channel.py # 反事实通道：真实经验+动作变异→想象经验
+│   ├── concept_bank.py      # 概念库：概念提取+组合式反事实生成
+│   ├── latent_state.py      # 隐变量模型：不可观测因素推断（固定4维上下文）
+│   ├── attention.py         # 注意力门控：信息量+显著性+驱动力调节（保守identity策略）
+│   ├── spatial_memory.py    # 空间记忆：增量地图节点+遗忘衰减+寻路
+│   ├── sleep.py             # 睡眠循环：疲劳/能量条件+记忆巩固
+│   ├── hemin.py             # 他者模型：影子自我对比
+│   └── danger.py            # 危险感知
 │
-├── growth/                  # 生长引擎
-│   ├── __init__.py
-│   ├── monitor.py           # 容量监控（loss/惊奇plateau检测）
-│   ├── expander.py          # 扩容器（维度扩展+权重复制）
-│   └── scheduler.py         # 生长调度策略
-│
-├── interface/               # 语言接口 / 外部通信
-│   ├── __init__.py
-│   ├── language.py          # GrowingLLM集成
-│   ├── symbol_grounding.py  # 符号接地（符号→连续映射）
-│   └── tools.py             # 工具调用
-│
-├── env/                     # 环境适配器
-│   ├── __init__.py
-│   ├── base.py              # 环境基类
-│   ├── maze.py              # 迷宫环境
-│   ├── sandbox.py           # 世界沙盘
-│   └── trading.py           # 量化交易
-│
-├── main.py                  # 主入口：启动自维持循环
-├── config.yaml              # 配置文件（τ范围、生长参数等）
-└── README.md
+└── growth/                  # 生长引擎
+    └── monitor.py           # 容量监控（loss/惊奇plateau检测）
 ```
-
 ## 核心循环（每 tick）
 
 ```
-1. 感知输入 → 连续编码 + 离散编码
+1. 感知 → 注意力门控（选择性感知）+ 物理先验检查（瞬移→应激）
 2. LNN 时序更新 (τ自适应) → 状态向量 h_t
-3. 世界模型预测下一帧 → 计算惊奇
-4. 惊奇 > 好奇心预算？ → 触发探索/生长
+3. 世界模型条件预测 (hidden+action) → 惊奇 → 误差通路选择
+4. 隐变量推断（持续高误差 → 不可观测因素）
 5. 自模型更新：内部状态 + 存在概率
-6. GameNN 多策略推理 → 选择动作
-7. 动作执行 → 环境改变 → 回到 1
-8. 每 N tick：反事实通道生成想象经验
-9. 离线时（空闲）：梦境巩固 + 经验重放
+6. 驱动力更新 → 竞争主导
+7. 认知处理 → GameNN 决策 + 规划前瞻
+8. 人脑式决策委员会：反射/边缘/习惯/规划/元认知 5 路投票 → 加权仲裁
+   （冲突→深思模式，危急→恐慌模式）
+9. GameNN 在线学习（TD 误差 + 能量奖励）
+10. 动作执行 → 环境改变 → 回到 1
+11. 每 300 tick：概念库组合式反事实生成
+12. 元-元认知：学习策略监控（误差无改善→切换策略）
+13. 睡眠时：经验巩固 + 疲劳恢复
 ```
 
 ## 设计原则
