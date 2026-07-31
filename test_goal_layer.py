@@ -50,6 +50,9 @@ class CausalEnv:
         if d<2 and self.unlocked:
             ed = 0.3
             self.eaten += 1
+            # 吃到后食物重置（防止停留虚高计数）
+            self.food = [np.random.randint(0,self.size), np.random.randint(0,self.size)]
+            self.unlocked = False
         else:
             ed = -0.002
         return {'energy_delta': ed, 'water_delta': -0.0002}
@@ -64,7 +67,7 @@ class CausalEnv:
 # ═══ G1/G2/G4：FakeAGI 系列 ═══
 
 def run_fakeagi(use_goal_layer=False, disable_reflex=False,
-                max_ticks=3000, seed=0):
+                const_explore=None, max_ticks=3000, seed=0):
     np.random.seed(seed)
     torch.manual_seed(seed)
     cfg = {"input_dim": 4, "self_state_dim": 14, "hidden_dim": 64,
@@ -74,7 +77,7 @@ def run_fakeagi(use_goal_layer=False, disable_reflex=False,
     env = CausalEnv()
     agi.set_env(env)
     if use_goal_layer:
-        # 注入目标层（能量目标 + 水目标）
+        # 注入目标层并启用调制
         agi.goal_state = GoalState()
         agi.goal_state.register(Goal(
             "energy_maintenance", target_value=0.8,
@@ -82,15 +85,17 @@ def run_fakeagi(use_goal_layer=False, disable_reflex=False,
         agi.goal_state.register(Goal(
             "water_maintenance", target_value=0.7,
             current_fn=lambda: agi.body.water, weight=1.5))
+        agi._goal_enabled = True
     else:
-        # 禁用目标层（基线隔离：强制 exploration_intent=0）
+        # 禁用目标层（基线隔离）
         agi.goal_state = GoalState()
         agi._goal_off = True
     if disable_reflex:
         agi._disable_reflex = True
+    if const_explore is not None:
+        agi._const_explore = const_explore  # 恒定探索率对照
     success_at = None
     for t in range(max_ticks):
-        # 目标层更新（在 step 内由 main 处理，这里只需确保存在）
         agi.step()
         if env.eaten > 0 and success_at is None:
             success_at = t
@@ -199,7 +204,8 @@ def test():
     print("实验13: 目标层消融 — 目标表征是否修复 S2", flush=True)
     print("=" * 60, flush=True)
     g1 = run_group("G1 基线（无目标层）", lambda seed=0: run_fakeagi(False, seed=seed))
-    g2 = run_group("G2 目标层（落差驱动搜索）", lambda seed=0: run_fakeagi(True, seed=seed))
+    g2 = run_group("G2 目标层（落差驱动）", lambda seed=0: run_fakeagi(True, seed=seed))
+    g5 = run_group("G5 恒定0.8探索+无目标层", lambda seed=0: run_fakeagi(False, const_explore=0.8, seed=seed))
     g3 = run_group("G3 RL+解锁中间奖励", lambda seed=0: run_rl(True, seed=seed))
     g4 = run_group("G4 去反射+目标层", lambda seed=0: run_fakeagi(True, True, seed=seed))
 
@@ -208,15 +214,18 @@ def test():
           f"食物 {g1['food']:.1f}", flush=True)
     print(f"  G2 目标层: 存活 {np.mean([r['survived'] for r in g2['results']]):.0f} "
           f"食物 {g2['food']:.1f}", flush=True)
+    print(f"  G5 恒定探索: 存活 {np.mean([r['survived'] for r in g5['results']]):.0f} "
+          f"食物 {g5['food']:.1f}", flush=True)
     print(f"  G3 RL+奖励: 食物 {g3['food']:.1f}", flush=True)
     print(f"  G4 去反射+目标: 存活 {np.mean([r['survived'] for r in g4['results']]):.0f} "
           f"食物 {g4['food']:.1f}", flush=True)
 
-    # 判定：G2 目标层修复 S2（存活+食物 vs G1 饿死）
-    g2_fixed = g2["food"] > 0 and g2["succ"] > 0
-    verdict = ("是 — 支持[目标表征缺失是根因]（公理④ 精炼）" if g2_fixed
-               else "否 — 更深的机制缺陷")
-    print(f"\n  判定: G2 目标层是否修复 S2: {verdict}", flush=True)
+    # 判定（≥2/3 成功 + 目标层优于恒定探索对照——分离目标表征 vs 高探索）
+    g2_fixed = g2["succ"] >= 2 and g2["food"] > g5["food"] * 1.2
+    verdict = ("是 — 目标层优于恒定探索（支持[目标表征是有效机制]）" if g2_fixed
+               else "否 — 高探索率即可解释，目标层无增量")
+    print(f"\n  判定: G2 目标层修复 S2（vs G5 恒定探索）: {verdict}", flush=True)
+    print(f"  说明: 此为配置有效性证据，公理④ 精炼需进一步消融", flush=True)
     return 0 if g2_fixed else 1
 
 

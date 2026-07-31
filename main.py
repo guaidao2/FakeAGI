@@ -41,6 +41,7 @@ class AGI:
         self.body = BodyModel()
         self.drives = DriveSystem()
         # 目标层（L1）：目标 vs 过程分离——落差驱动 + 信息寻求
+        # 默认关闭调制（避免污染旧实验）；测试中显式开启
         from core.goals import GoalState, Goal
         self.goal_state = GoalState()
         self.goal_state.register(Goal(
@@ -50,6 +51,8 @@ class AGI:
             "water_maintenance", target_value=0.7,
             current_fn=lambda: self.body.water, weight=1.5))
         self._goal_info = {}
+        self._goal_enabled = False   # 默认关闭探索调制（旧实验零影响）
+        self._goal_off = False
         self.self_model = SelfModel()
         self.homeostasis = Homeostasis()
         
@@ -351,9 +354,12 @@ class AGI:
                 exploration = 0.1
             else:
                 exploration = 0.2
-            # 目标层：落差高 + 无线索 → 信息寻求 → 探索率大幅提升
-            # （信息隐藏环境需要主动扫掠，非 0.35 的温和探索）
-            if (exploration_intent > 0.2
+            # 目标层：落差高 + 无线索 → 信息寻求 → 探索率提升
+            # （仅 _goal_enabled 时生效——默认关闭，旧实验零影响）
+            if getattr(self, '_const_explore', None) is not None:
+                exploration = self._const_explore  # 对照：恒定探索率
+            elif (exploration_intent > 0.2
+                    and self._goal_enabled
                     and not getattr(self, '_goal_off', False)):
                 exploration = max(exploration, 0.8)
             
@@ -427,10 +433,12 @@ class AGI:
                                 DIR_MAP[w], trust_eff)
                             self._language_used_tick = self.tick
                             break
-                # 1. 反射投票（本能：朝主要目标）
+                # 1. 反射投票（本能：朝主要目标）——G4 消融可禁用
                 reflex_v = self.committee.reflex_vote(
                     obs, drive_bias, self.body.get_state_dict(),
                     secondary_reached=self._secondary_reached(obs))
+                if getattr(self, '_disable_reflex', False):
+                    reflex_v = np.zeros_like(reflex_v)  # 消融：反射归零
                 # 2. 边缘系统投票（驱动力偏置）
                 limbic_v = self.committee.limbic_vote(drive_bias)
                 # 3. 习惯投票（GameNN 概率，用 LNN 输出状态与训练一致）
