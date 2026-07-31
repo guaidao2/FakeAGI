@@ -14,3 +14,6 @@ gamenet/
 interface/
 test_results.md
 test_results.txt
+*.txt
+experience_dna.json
+checkpoints/
