@@ -43,10 +43,10 @@ python main.py --maze 12
 
 ### 接入世界温室（world-sim）
 
-FakeAGI 完整认知架构可作为决策核心接入 [world-sim](https://github.com/guaidao2/world-sim) 生态沙盘（村庄/资源/昼夜/野兽/敌对部落）：
+FakeAGI 完整认知架构可作为决策核心接入 world-sim 生态沙盘（村庄/资源/昼夜/野兽/敌对部落）。world-sim 是本地项目（位于 `D:\编程\game\world-sim`，暂无独立 GitHub 仓库），通过 `world_sim/fakeagi_bridge.py` 接入：
 
 ```bash
-cd world-sim
+cd ../world-sim
 python main.py   # AGIBeing 自动加载 FakeAGI 核心
 ```
 
