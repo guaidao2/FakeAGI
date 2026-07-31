@@ -184,11 +184,19 @@ session 结束（死亡/主动保存）
 
 ---
 
-## 6. 实现路线（未来）
+## 6. 实现路线（当前进度 2025-07-31）
 
-1. **P0：checkpoint 持久化**（session 内权重快照 + 恢复）
-2. **P1：MoE 路由器**（现有委员会 → 路由器 + 专家池）
-3. **P1：多专家世界模型**（分情境预测）
-4. **P2：经验 DNA 提取器**（session 结束 → 规律/技能压缩）
-5. **P2：DNA 合并与变异**（跨代加权合并 + 扰动）
-6. **P3：多实例种群**（多个 session 并行，选择压力显式化）
+- [x] **P0：checkpoint 持久化**（`core/persistence.py`）— LNN/WM/GameNN/价值/空间记忆/概念库/MoE，维度恢复
+- [x] **P1：MoE 路由器**（`cognition/decision/moe.py`）— 情境路由、专家创建/退役、在线学习
+- [x] **P1：多专家世界模型**（`cognition/temporal/world_experts.py`）— MoE 激活分情境预测
+- [x] **P2：经验 DNA**（`core/dna.py`）— 规律/技能/价值/生长轨迹提取，跨代加权合并，先验应用
+- [x] **P3：种群演化**（`test_evolution.py`）— 多代多个体，致命危险区选择压力，跨代改善验证（787→800）
+- [ ] P3b：多实例并行（当前串行，可并行化）
+- [ ] P4：语言接口 / 符号接地
+
+验证：
+- `python test_persist.py` — checkpoint 往返 ✅
+- `python test_moe.py` — MoE 路由/创建/恢复 ✅
+- `python test_evolution.py` — 跨代演化 ✅
+- `python test_experiment4.py` — 因果推理 ✅（无回归）
+
