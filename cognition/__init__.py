@@ -9,6 +9,7 @@ import torch
 import numpy as np
 from cognition.temporal.lnn import LNN
 from cognition.temporal.world_model import WorldModel
+from cognition.temporal.world_experts import MultiExpertWorldModel
 from cognition.learning.surprise import SurpriseComputer
 from cognition.decision.gamenn import GameNNDecision as GameNN
 from cognition.planner import Planner
@@ -27,6 +28,8 @@ class CognitionPipeline:
         self.self_state_dim = cfg.get("self_state_dim", 14)  # body(8) + drives(6)
         self.lnn = LNN(input_dim=input_dim + self.self_state_dim, hidden_dim=hidden_dim)
         self.world_model = WorldModel(input_dim=hidden_dim)
+        # P1b: 多专家世界模型（分情境预测增强，可选启用）
+        self.expert_world = MultiExpertWorldModel(input_dim=hidden_dim)
         self.surprise_computer = SurpriseComputer()
         self.gamenn = GameNN(n_strategies=n_strategies, n_actions=n_actions, state_dim=hidden_dim)
         self.hidden = None
@@ -37,6 +40,7 @@ class CognitionPipeline:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.lnn.to(self.device)
         self.world_model.to(self.device)
+        self.expert_world.to(self.device)
 
         # 生长跟踪
         self.growth_count = 0
@@ -46,6 +50,7 @@ class CognitionPipeline:
         self.growth_cooldown = 0
         self._growth_losses = []
         self.last_action = None  # 用于误差通路选择
+        self.expert_weights = None  # P1b: MoE 专家激活权重（主循环注入）
         
         # 置信度跟踪（错误处理边界）
         self.confidence = 0.0       # 初始置信度0，让反射主导直到学习建立
@@ -116,6 +121,17 @@ class CognitionPipeline:
             # 感知通路：更新世界模型（置信度门控，条件于动作）
             world_loss = self.world_model.train_step(
                 prev_h.detach(), self.hidden.detach(), action=act_t)
+            
+            # P1b: 多专家世界模型分情境训练（若 MoE 激活可用）
+            try:
+                ew = getattr(self, 'expert_weights', None)
+                if ew and len(ew) > 0 and hasattr(self, 'expert_world'):
+                    self.expert_world.ensure_expert(max(ew.keys()) + 1)
+                    self.expert_world.train_step(
+                        prev_h.detach(), self.hidden.detach(),
+                        action=act_t, expert_weights=ew)
+            except Exception:
+                pass
             
             # 记录经验到想象通道
             if prev_h is not None:
@@ -207,6 +223,10 @@ class CognitionPipeline:
 
         self.lnn.grow(new_h)
         self.world_model.grow(new_h)
+        try:
+            self.expert_world.grow(new_h)
+        except Exception:
+            pass
 
         # 保留旧 hidden 状态并扩展到新维度
         if old_hidden is not None:

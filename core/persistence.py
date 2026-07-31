@@ -43,6 +43,7 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
             data["cognition"] = {
                 "lnn": agi.cognition.lnn.state_dict(),
                 "world_model": agi.cognition.world_model.state_dict(),
+                "expert_world": agi.cognition.expert_world.get_state_dict(),
                 # GameNN 是普通类（非 nn.Module），手动序列化
                 "gamenn": {
                     "q_nets": [q.state_dict() for q in g.q_nets],
@@ -166,6 +167,11 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
                 agi.cognition.obs_dim = agi.cognition.lnn.input_dim - agi.cognition.self_state_dim
             agi.cognition.lnn.load_state_dict(c["lnn"])
             agi.cognition.world_model.load_state_dict(c["world_model"])
+            if "expert_world" in c:
+                try:
+                    agi.cognition.expert_world.load_state_dict(c["expert_world"])
+                except Exception:
+                    pass
             # GameNN 手动恢复
             g = agi.cognition.gamenn
             gm = c["gamenn"]

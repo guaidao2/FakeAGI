@@ -313,6 +313,9 @@ class AGI:
                         moe_state = self._moe_state_vector()
                         activations, _ = self.moe.route(obs, moe_state, surprise)
                         self.moe_activations = activations
+                        # 注入激活权重给多专家世界模型
+                        if hasattr(self.cognition, 'expert_weights'):
+                            self.cognition.expert_weights = activations
                         if activations:
                             a, _ = self.moe.get_action(activations, moe_state)
                             if a is not None:
