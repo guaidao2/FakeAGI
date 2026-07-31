@@ -165,24 +165,26 @@ def test():
     # ─── 对照组（语言关闭）───
     print("\n── 对照组（语言关闭：食物方向不可见）──", flush=True)
     ctrl_results = []
-    for seed in range(3):
+    for seed in range(5):
         r = run_episode(False, seed=seed)
         ctrl_results.append(r)
         print(f"  seed={seed}: died_at={r['died_at']} food={r['food_found']} "
               f"alive={r['alive']} energy={r['energy']:.2f}", flush=True)
     ctrl_food = np.mean([r['food_found'] for r in ctrl_results])
-    ctrl_survive = np.mean([(r['died_at'] or 2000) for r in ctrl_results])
+    ctrl_survive = np.mean([(r['died_at'] if r['died_at'] is not None else 2000)
+                            for r in ctrl_results])
 
     # ─── 实验组（语言开启）───
     print("\n── 实验组（语言开启：食物方向由词透露）──", flush=True)
     exp_results = []
-    for seed in range(3):
+    for seed in range(5):
         r = run_episode(True, seed=seed)
         exp_results.append(r)
         print(f"  seed={seed}: died_at={r['died_at']} food={r['food_found']} "
               f"alive={r['alive']} energy={r['energy']:.2f}", flush=True)
     exp_food = np.mean([r['food_found'] for r in exp_results])
-    exp_survive = np.mean([(r['died_at'] or 2000) for r in exp_results])
+    exp_survive = np.mean([(r['died_at'] if r['died_at'] is not None else 2000)
+                           for r in exp_results])
 
     # ─── 理解测试（实验组语言器官）───
     # 重新跑一个实验组个体并测理解
@@ -198,7 +200,7 @@ def test():
     env = LangSurvivalEnv(use_language=True)
     agi.set_env(env)
     lang = agi.cognition.language
-    # 先积累语言-状态样本做接地训练
+    # 先积累语言-状态样本做接地训练（目标=食物方向，与理解测试一致）
     word_samples, state_samples = [], []
     for t in range(800):
         env.words = env.get_language()
@@ -206,7 +208,11 @@ def test():
         agi.step()
         if env.words and t % 4 == 0:
             word_samples.append(env.words)
-            state_samples.append(env.observe())
+            # 食物方向（相对位置，归一化）——与 comprehension_test 目标一致
+            fd = np.array([
+                (env.food_pos[0]-env.pos[0])/env.size,
+                (env.food_pos[1]-env.pos[1])/env.size])
+            state_samples.append(fd)
         if not agi.alive:
             break
     if word_samples:

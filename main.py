@@ -78,6 +78,10 @@ class AGI:
         self.override_action = -1
         self._food_recently_tick = -1000
         self.causal_error = 0.0
+        # P8a: 语言可信度（可学习先验——听词结果好则强化，差则坍缩）
+        self._language_trust = 0.5  # 初始半信半疑（可被经验修正）
+        self._language_used_tick = 0
+        self._language_found_food = False
         
         # ─── 运行状态 ───
         self.tick = 0
@@ -341,15 +345,18 @@ class AGI:
             # ─── 7c. 人脑式决策委员会：并行投票 + 加权仲裁 ───
             self._ensure_moe()
             if self.committee is not None:
-                # 0. 语言指令投票（方向词→动作先验，听词行走的本能）
+                # 0. 语言指令投票（方向词→动作先验，可信度驱动——可学习）
                 lang_v = None
                 if (hasattr(self.cognition, 'language')
                         and self.cognition.language is not None
-                        and self.cognition.language_tokens):
+                        and self.cognition.language_tokens
+                        and self._language_trust > 0.15):
                     DIR_MAP = {"east": 3, "west": 2, "north": 1, "south": 4}
                     for w in self.cognition.language_tokens:
                         if w in DIR_MAP:
-                            lang_v = self.committee.language_vote(DIR_MAP[w])
+                            lang_v = self.committee.language_vote(
+                                DIR_MAP[w], self._language_trust)
+                            self._language_used_tick = self.tick
                             break
                 # 1. 反射投票（本能：朝主要目标）
                 reflex_v = self.committee.reflex_vote(
@@ -505,6 +512,13 @@ class AGI:
                     if env_energy > 0.01:
                         self.override_action = -1
                         self._food_recently_tick = self.tick
+                        # P8a: 听词后找到食物 → 语言可信度强化（学习信号）
+                        if self._language_used_tick == self.tick:
+                            self._language_trust = min(1.0, self._language_trust + 0.05)
+                # P8a: 用了语言但没找到食物 → 可信度轻微衰减（假线索坍缩）
+                if (self._language_used_tick == self.tick
+                        and abs(env_energy) <= 0.001):
+                    self._language_trust = max(0.0, self._language_trust - 0.002)
                 if abs(env_water) > 0.001:
                     self.body.water = np.clip(self.body.water + env_water, 0, 1)
         

@@ -67,15 +67,15 @@ class DecisionCommittee:
             vote[4] = drive_bias[3]  # down
         return vote
 
-    def language_vote(self, language_dir: int) -> np.ndarray:
+    def language_vote(self, language_dir: int, trust: float = 0.5) -> np.ndarray:
         """语言指令投票：方向词（east/west/north/south）→ 动作偏好
-        词→动作先验：系统"天生倾向"朝听到的方向走（指令本能）。
-        这是可学习的先验——若词是假线索，世界模型会通过预测失败坍缩它。
+        词→动作先验，幅值 = 语言可信度（trust）——听词结果好则强，
+        差则坍缩（假线索时 trust→0，投票消失）。
         方向词映射：east→3(右), west→2(左), north→1(上), south→4(下)
         """
         vote = np.zeros(self.n_actions)
         if language_dir is not None and 1 <= language_dir <= 4:
-            vote[language_dir] = 0.8  # 语言指令权重（低于反射 1.0，可被覆盖）
+            vote[language_dir] = 0.8 * max(0.0, min(1.0, trust))
         return vote
     
     def habit_vote(self, gamenn_probs: np.ndarray) -> np.ndarray:
@@ -104,7 +104,7 @@ class DecisionCommittee:
         """情境权重：由危机程度和置信度动态调整"""
         w = dict(self.weights)
         
-        # 恐慌模式：健康极低 + 应激高 → 反射/边缘主导，规划归零
+        # 恐慌模式：健康极低 + 应激高 → 反射/边缘主导，规划/语言归零
         self.panic_mode = health < 0.3 and stress > 0.5
         if self.panic_mode:
             w["reflex"] = 0.65
@@ -112,6 +112,7 @@ class DecisionCommittee:
             w["habit"] = 0.05
             w["plan"] = 0.0
             w["meta"] = 0.0
+            w["language"] = 0.0  # 危机时不听词（保命优先）
             return w
         
         # 深思模式：置信度低（学习期）或冲突 → 规划/元认知权重提升
