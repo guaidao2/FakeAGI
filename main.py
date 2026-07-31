@@ -40,6 +40,16 @@ class AGI:
         # ─── 身体层 ───
         self.body = BodyModel()
         self.drives = DriveSystem()
+        # 目标层（L1）：目标 vs 过程分离——落差驱动 + 信息寻求
+        from core.goals import GoalState, Goal
+        self.goal_state = GoalState()
+        self.goal_state.register(Goal(
+            "energy_maintenance", target_value=0.8,
+            current_fn=lambda: self.body.energy, weight=2.0))
+        self.goal_state.register(Goal(
+            "water_maintenance", target_value=0.7,
+            current_fn=lambda: self.body.water, weight=1.5))
+        self._goal_info = {}
         self.self_model = SelfModel()
         self.homeostasis = Homeostasis()
         
@@ -110,6 +120,15 @@ class AGI:
         if len(obs) >= 5:
             return obs[4] > 0.5  # 开关已触发标志
         return len(obs) >= 4 and abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
+
+    def _goal_has_resource_direction(self, obs) -> bool:
+        """观测是否包含有效的资源方向线索（环境特定，默认仅近距食物）"""
+        try:
+            if hasattr(self.env, 'food_nearby') and self.env.food_nearby():
+                return True
+        except Exception:
+            pass
+        return False
 
     # ─── P8b: 主动说话（L4 意图）───
     def speak(self) -> bool:
@@ -304,6 +323,15 @@ class AGI:
         self.drives.update(body_state, self.self_model.survival_prob, surprise, self.tick, danger_nearby)
         dominant_drive = self.drives.get_dominance()
         drive_bias = self.drives.get_action_bias()
+
+        # ─── 6b. 目标层更新（落差 + 信息寻求动机）───
+        # 资源线索检测：最近是否吃到资源（正回报 = 有效信号；
+        # 观测指向开关方向不算资源信号——它不消解能量落差）
+        recently_fed = (self.tick - self._food_recently_tick) < 30
+        has_signal = recently_fed or self._goal_has_resource_direction(obs)
+        self._goal_info = self.goal_state.update(has_resource_signal=has_signal)
+        goal_gap = self.goal_state.gap
+        exploration_intent = self.goal_state.exploration_intent
         
         # ─── 7. 认知处理 ───
         action = 0
@@ -314,7 +342,7 @@ class AGI:
             latent_ctx = self.latent_state.get_context_vector()
             self_state = np.concatenate([body_vec, drive_vec, latent_ctx])
             
-            # 探索率由驱动力决定
+            # 探索率由驱动力决定 + 目标层信息寻求调制
             if dominant_drive in ("hunger", "thirst", "fear"):
                 exploration = 0.05
             elif dominant_drive in ("boredom", "curiosity"):
@@ -323,6 +351,11 @@ class AGI:
                 exploration = 0.1
             else:
                 exploration = 0.2
+            # 目标层：落差高 + 无线索 → 信息寻求 → 探索率大幅提升
+            # （信息隐藏环境需要主动扫掠，非 0.35 的温和探索）
+            if (exploration_intent > 0.2
+                    and not getattr(self, '_goal_off', False)):
+                exploration = max(exploration, 0.8)
             
             # 误差通路：行动通路 → 提高探索率（在 process 之前生效）
             action, info = self.cognition.process(
