@@ -79,9 +79,52 @@ class CognitionPipeline:
         self.imagination = ImaginationChannel(
             world_model=self.world_model, n_actions=n_actions
         )
+        # P6: 器官生成器（高维输入自动生成感知器官）
+        self.organ_generator = None
+        if cfg.get("organ_growth", True):
+            from cognition.perception import OrganGenerator
+            self.organ_generator = OrganGenerator(
+                output_dim=cfg.get("organ_output_dim", 8),
+                max_organs=cfg.get("max_organs", 3),
+                competition_ticks=cfg.get("organ_competition_ticks", 100),
+                survival_gate=cfg.get("organ_survival_gate", 0.5))
+        self.organ_cache = {}      # modality -> (输入维度, 成熟器官)
+        self.organ_active = None   # 当前使用的器官
+        self.organ_errors = {}     # organ_id -> 预测误差（竞争期用）
     
     def process(self, obs: np.ndarray, self_state: np.ndarray,
                 exploration_ratio: float = 0.0) -> tuple:
+        # P6: 器官感知 — 高维输入自动生成器官（低维直通，零行为变化）
+        organ_processed = False
+        if self.organ_generator is not None and len(obs) >= 16:
+            modality = self.organ_generator.infer_modality(len(obs))
+            # 获取/生成该模态成熟器官
+            organ = self.organ_generator.get_organ(modality)
+            if organ is None:
+                # 无成熟器官：生成候选（生存门控由 main 层提供 survival_state，
+                # 这里用默认 gate——main 集成后可传入）
+                events = self.organ_generator.step(
+                    modality, len(obs), self.organ_errors, survival_state=1.0)
+                if events["settled"] is not None:
+                    organ = events["settled"]
+                    self.organ_cache[modality] = (len(obs), organ)
+                    if getattr(self, 'verbose', False):
+                        print(f"[ORGAN] 成熟: {organ.describe()} "
+                              f"fitness={organ.fitness:.4f}", flush=True)
+            if organ is not None:
+                # 用器官处理观测（保持 device 一致）
+                obs_t = torch.tensor(obs, dtype=torch.float32,
+                                     device=self.device).unsqueeze(0)
+                organ = organ.to(self.device)
+                processed = organ(obs_t).detach().cpu().numpy().flatten()
+                # 器官输出维度 ≤ obs 维度 → 替换观测（器官是"更好的眼睛"）
+                if len(processed) <= len(obs):
+                    obs = processed
+                    self.organ_active = organ
+                    organ_processed = True
+        if not organ_processed:
+            self.organ_active = None
+
         # P4: 观测抽象层 — 原始观测 → 特征通道 → 抽象向量
         # 若原始观测维度增大（新信号源），自动新增通道（主动生长，非被动补丁）
         if len(obs) > self.obs_abstraction.raw_dim:
@@ -152,6 +195,25 @@ class CognitionPipeline:
                         pred.cpu().numpy().flatten(),
                         self.hidden.detach().cpu().numpy().flatten()
                     )
+                # P6: 器官竞争期误差注入（候选器官的 fitness 依据）
+                if self.organ_generator is not None and self.organ_active is not None:
+                    oid = self.organ_active.organ_id
+                    self.organ_errors[oid] = surprise
+                    # 推进竞争期
+                    modality = self.organ_active.modality
+                    if modality in self.organ_generator.candidates:
+                        self.organ_generator.competition_step(
+                            modality, self.organ_errors)
+                        cands = self.organ_generator.candidates[modality]
+                        if cands and cands[0].age >= self.organ_generator.competition_ticks:
+                            best = self.organ_generator.settle_competition(modality)
+                            if best is not None:
+                                self.organ_cache[modality] = (len(obs), best)
+                                if getattr(self, 'verbose', False):
+                                    print(f"[ORGAN] 竞争结算: 保留 {best.describe()} "
+                                          f"fitness={best.fitness:.4f} "
+                                          f"(凋亡 {self.organ_generator.pruned_count})",
+                                          flush=True)
             
             # 误差通路选择：误差是否可通过行动消除？
             # 如果惊奇主要来自空间位置偏差 → 行动通路（调整导航）

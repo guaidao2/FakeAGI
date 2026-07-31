@@ -146,6 +146,22 @@ class AGI:
                     "world_branches",
                     grow_fn=lambda d: wm.split() or None,
                     dim_fn=lambda: len(wm.branches))
+            # P6: 感知器官（结构生长：replicate/mutate 也是生长事件）
+            if (self.cognition.organ_generator is not None
+                    and "perception_organ" not in self.growth.modules):
+                gen = self.cognition.organ_generator
+                def _organ_grow(d=None):
+                    organ = gen.get_organ(
+                        gen.infer_modality(d or 16))
+                    if organ is None:
+                        return None
+                    return organ.replicate() or organ.mutate()
+                self.growth.register(
+                    "perception_organ",
+                    grow_fn=_organ_grow,
+                    dim_fn=lambda: sum(len(o.patches) for o in
+                                       [gen.get_organ(m) for m in gen.registry]
+                                       if o is not None))
         # 检测观测抽象维度变化
         abs_dim = self.cognition.obs_dim
         if self._last_abstract_dim is not None and abs_dim > self._last_abstract_dim:
