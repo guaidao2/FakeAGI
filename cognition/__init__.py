@@ -92,6 +92,19 @@ class CognitionPipeline:
         self.organ_active = None   # 当前使用的器官
         self.organ_errors = {}     # organ_id -> 预测误差（竞争期用）
         self._organ_competition_obs = None  # 竞争期候选输出缓存
+        # 语言器官（符号接地，config 开启——默认关闭，低维环境零影响）
+        self.language = None
+        self.language_tokens = None
+        self.language_vector = None
+        if cfg.get("language", False):
+            from cognition.language import SymbolGrounding
+            vocab = cfg.get("language_vocab", ["food", "water", "danger", "safe",
+                                               "near", "far", "yes", "no"])
+            self.language = SymbolGrounding(
+                vocab=vocab,
+                vocab_size=cfg.get("language_vocab_size", 32),
+                embed_dim=cfg.get("language_embed_dim", 8),
+                output_dim=cfg.get("language_output_dim", 8))
         self._organ_competition_raw = None  # 竞争期原始输入维度
         self._in_competition = False        # 竞争期标志（obs 被压缩后仍走器官路径）
     
@@ -165,6 +178,19 @@ class CognitionPipeline:
         abstract_obs = self.obs_abstraction.observe(obs)
         # 抽象维度 > 原 obs_dim → 触发感知生长（协调器会在 main 层同步全链路）
         self.obs_dim = max(self.obs_dim, len(abstract_obs))
+
+        # 语言通道（可选）：token → 语言向量 → 拼入观测（与感知器官同构）
+        self.language_vector = None
+        if self.language is not None and self.language_tokens is not None:
+            try:
+                tok_ids = self.language.tokenize(self.language_tokens)
+                if tok_ids:
+                    lv = self.language.organ.encode(tok_ids)
+                    self.language_vector = lv.detach().cpu().numpy().flatten()
+            except Exception:
+                self.language_vector = None
+        if self.language_vector is not None:
+            abstract_obs = np.concatenate([abstract_obs, self.language_vector])
 
         combined = np.concatenate([abstract_obs, self_state])
 
