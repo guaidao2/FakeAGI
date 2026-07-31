@@ -163,6 +163,10 @@ agi/
 | E10 语言生存压力 | ✅ 通过（对照组 213tick 饿死 vs 语言组满存活/143.2 食物） |
 | E11 语言意图 | ✅ 通过（会说 2000tick/24.6 食物 vs 不会说 241tick/0.4，需求驱动说话） |
 
+> **E12 对照实验**（预测误差 vs 外挂奖励 RL）：如实记录，不做通过/失败判定——
+> 简单环境 FakeAGI 优（480 vs 76），信息隐藏环境 RL 不稳定占优（结论反转，经三轮公平性修正）。
+> 详见 `PAPER.md §4.4`。结论：**"观测可预测性"是预测误差范式的边界条件**。
+
 运行：`python test_experimentN.py` / `python test_superposition.py` / `python test_organ_gen.py` / `python test_language.py` / `python test_language_survival.py` / `python test_language_intent.py`
 
 ## License
