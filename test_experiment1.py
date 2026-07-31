@@ -28,7 +28,6 @@ def test():
             dx=(self.food[0]-self.pos[0])/8; dy=(self.food[1]-self.pos[1])/8
             return np.array([dx,dy,0.,0.])
         def step(self,a):
-            if a==4: return {'energy_delta':-0.0002,'water_delta':-0.0001}
             dirs=[(0,0),(0,-1),(-1,0),(1,0),(0,1)]; dx,dy=dirs[a%5]
             self.pos[0]=max(0,min(7,self.pos[0]+dx)); self.pos[1]=max(0,min(7,self.pos[1]+dy))
             at=abs(self.pos[0]-self.food[0])+abs(self.pos[1]-self.food[1])<2
@@ -48,7 +47,6 @@ def test():
             dx=(self.food[0]-self.pos[0])/16; dy=(self.food[1]-self.pos[1])/16
             return np.array([dx,dy,0.,0.])
         def step(self,a):
-            if a==4: return {'energy_delta':-0.0002,'water_delta':-0.0001}
             dirs=[(0,0),(0,-1),(-1,0),(1,0),(0,1)]; dx,dy=dirs[a%5]
             self.pos[0]=max(0,min(15,self.pos[0]+dx)); self.pos[1]=max(0,min(15,self.pos[1]+dy))
             at=abs(self.pos[0]-self.food[0])+abs(self.pos[1]-self.food[1])<2
