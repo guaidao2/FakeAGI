@@ -170,9 +170,20 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             agi.cognition.world_model.load_state_dict(c["world_model"])
             if "expert_world" in c:
                 try:
-                    # 确保 heads 数量匹配（按 checkpoint 中的 head 数补齐/截断）
+                    # 先 grow 到保存时的 hidden 维度（形状匹配）
+                    if (agi.cognition.expert_world.input_dim < saved_hidden
+                            and saved_hidden > 0):
+                        agi.cognition.expert_world.grow(saved_hidden)
+                    # 确保 heads 数量匹配（数唯一 head 索引，而非子 key 数）
                     ew_sd = c["expert_world"]
-                    n_saved = len([k for k in ew_sd if k.startswith("heads.")])
+                    head_ids = set()
+                    for k in ew_sd:
+                        if k.startswith("heads."):
+                            try:
+                                head_ids.add(int(k.split(".")[1]))
+                            except (ValueError, IndexError):
+                                pass
+                    n_saved = max(head_ids) + 1 if head_ids else 1
                     from cognition.temporal.world_experts import ExpertWorldHead
                     while len(agi.cognition.expert_world.heads) < n_saved:
                         agi.cognition.expert_world.heads.append(
