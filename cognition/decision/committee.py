@@ -30,6 +30,7 @@ class DecisionCommittee:
             "habit": 0.25,      # 习惯/GameNN
             "plan": 0.10,       # 规划/前额叶
             "meta": 0.05,       # 元认知
+            "language": 0.20,   # 语言指令（听词行走）
         }
         self.last_votes = {}
         self.conflict_mode = False   # 深思模式
@@ -64,6 +65,17 @@ class DecisionCommittee:
             vote[2] = drive_bias[1]  # left
             vote[3] = drive_bias[2]  # right
             vote[4] = drive_bias[3]  # down
+        return vote
+
+    def language_vote(self, language_dir: int) -> np.ndarray:
+        """语言指令投票：方向词（east/west/north/south）→ 动作偏好
+        词→动作先验：系统"天生倾向"朝听到的方向走（指令本能）。
+        这是可学习的先验——若词是假线索，世界模型会通过预测失败坍缩它。
+        方向词映射：east→3(右), west→2(左), north→1(上), south→4(下)
+        """
+        vote = np.zeros(self.n_actions)
+        if language_dir is not None and 1 <= language_dir <= 4:
+            vote[language_dir] = 0.8  # 语言指令权重（低于反射 1.0，可被覆盖）
         return vote
     
     def habit_vote(self, gamenn_probs: np.ndarray) -> np.ndarray:

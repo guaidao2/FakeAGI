@@ -341,6 +341,16 @@ class AGI:
             # ─── 7c. 人脑式决策委员会：并行投票 + 加权仲裁 ───
             self._ensure_moe()
             if self.committee is not None:
+                # 0. 语言指令投票（方向词→动作先验，听词行走的本能）
+                lang_v = None
+                if (hasattr(self.cognition, 'language')
+                        and self.cognition.language is not None
+                        and self.cognition.language_tokens):
+                    DIR_MAP = {"east": 3, "west": 2, "north": 1, "south": 4}
+                    for w in self.cognition.language_tokens:
+                        if w in DIR_MAP:
+                            lang_v = self.committee.language_vote(DIR_MAP[w])
+                            break
                 # 1. 反射投票（本能：朝主要目标）
                 reflex_v = self.committee.reflex_vote(
                     obs, drive_bias, self.body.get_state_dict(),
@@ -398,9 +408,12 @@ class AGI:
                         pass
                 
                 # 加权仲裁（委员会 + MoE 融合：MoE 动作优先，专家置信度高时）
+                votes = {"reflex": reflex_v, "limbic": limbic_v,
+                         "habit": habit_v, "plan": plan_v, "meta": meta_v}
+                if lang_v is not None:
+                    votes["language"] = lang_v
                 decision = self.committee.decide(
-                    {"reflex": reflex_v, "limbic": limbic_v,
-                     "habit": habit_v, "plan": plan_v, "meta": meta_v},
+                    votes,
                     health=self.body.health,
                     stress=self.body.stress,
                     confidence=gamenn_confidence,
