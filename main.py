@@ -99,9 +99,10 @@ class AGI:
         drive_vec_now = self.drives.get_state_vector() if hasattr(self.drives, 'get_state_vector') else None
         obs = self.attention.update(obs, drive_vec_now)
         
-        # ─── 1c. 物理先验检查 ───
+        # ─── 1c. 物理先验检查（瞬移→应激上升） ───
         if hasattr(self, 'prev_pos') and self.prev_pos is not None:
-            self.physics.check_teleport(self.prev_pos, self.pos)
+            if self.physics.check_teleport(self.prev_pos, self.pos):
+                self.body.stress = min(1.0, self.body.stress + 0.1)
         
         # ─── 2. 危险感知 ───
         threat = self.danger_system.sense(obs, self.tick)
@@ -144,12 +145,6 @@ class AGI:
         # ─── 5. 自模型更新标记位（实际更新放到认知处理之后） ───
         surprise = 0.0
         
-        # ─── 5. 隐变量推断 ───
-        surprise_hint = surprise
-        latent_found = self.latent_state.observe_prediction_error(surprise_hint, self.tick, obs)
-        # 隐变量上下文拼接到自模型状态
-        latent_ctx = self.latent_state.get_context_vector()
-        
         # ─── 6. 驱动力更新 ───
         body_state = self.body.get_state_dict()
         self.drives.update(body_state, self.self_model.survival_prob, surprise, self.tick, danger_nearby)
@@ -159,10 +154,11 @@ class AGI:
         # ─── 7. 认知处理 ───
         action = 0
         if self.cognition and not self.body.is_sleeping:
-            # 构建完整自模型状态（身体 + 驱动力 + 空间）
+            # 构建完整自模型状态（身体 + 驱动力 + 隐变量上下文）
             body_vec = self.body.get_state_vector()
             drive_vec = self.drives.get_state_vector()
-            self_state = np.concatenate([body_vec, drive_vec])
+            latent_ctx = self.latent_state.get_context_vector()
+            self_state = np.concatenate([body_vec, drive_vec, latent_ctx])
             
             # 探索率由驱动力决定
             if dominant_drive in ("hunger", "thirst", "fear"):
@@ -178,6 +174,10 @@ class AGI:
             action, info = self.cognition.process(obs, self_state, exploration)
             surprise = info.get("surprise", 0.0)
             error_path = info.get("error_path", "perception")
+            
+            # ─── 隐变量推断（在真实 surprise 产生后） ───
+            latent_found = self.latent_state.observe_prediction_error(
+                surprise, self.tick, obs)
 
             # 误差通路：行动通路 → 随机探索调整
             if error_path == "action" and surprise > 0.2 and not self.body.is_critical():
@@ -229,8 +229,11 @@ class AGI:
             if not suppress_reflex and len(obs) >= 4:
                 dx, dy = obs[0], obs[1]
                 always_seek = self.body.energy < 0.8 or self.drives.hunger > 0.2
-                # 次级目标已到达时，用主要目标（食物）做导航
-                secondary_reached = len(obs) >= 4 and abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
+                # 次级目标已到达时，用主要目标（食物）做导航（用触发标志判定）
+                if len(obs) >= 5:
+                    secondary_reached = obs[4] > 0.5  # 开关已触发
+                else:
+                    secondary_reached = abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
                 if always_seek or secondary_reached:
                     if abs(dx) > 0.05 or abs(dy) > 0.05:
                         if abs(dx) > abs(dy):
@@ -289,16 +292,33 @@ class AGI:
         if self.body.is_sleeping:
             action = 0  # 睡眠时动作无关，自模型会处理恢复
         
-        # ─── 7b. 元认知重定向
+        # ─── 7b. 元认知重定向（仅当元认知检测到知识缺口或主要目标确认为假时才触发）
         if not self.body.is_sleeping and len(obs) >= 4:
             ate_recently = hasattr(self, '_food_recently_tick') and (self.tick - self._food_recently_tick) < 30
             near_primary = len(obs) >= 2 and abs(obs[0]) < 0.08 and abs(obs[1]) < 0.08
             # 检测主要目标是否是"假"的（站在目标上但没获得能量）
             fake_primary = near_primary and len(obs) >= 5 and obs[4] < 0.5
-            if self.body.energy < 0.95 and not ate_recently and (not near_primary or fake_primary):
+            # 元认知知识缺口（GapDetector 检测到因果/策略缺口）
+            mc_gap = False
+            try:
+                if self.metacognition is not None:
+                    mc_gap = self.metacognition.get_state().get("gap_detected", False)
+            except Exception:
+                pass
+            if (mc_gap or fake_primary) and self.body.energy < 0.95 and not ate_recently:
                 sx, sy = obs[2], obs[3]
-                secondary_reached = abs(sx) < 0.05 and abs(sy) < 0.05
-                if not secondary_reached:
+                # 次级目标已到达判定：obs[4] 存在时用触发标志，否则用距离阈值
+                if len(obs) >= 5:
+                    secondary_reached = obs[4] > 0.5  # 开关已触发
+                else:
+                    secondary_reached = abs(sx) < 0.05 and abs(sy) < 0.05
+                if secondary_reached:
+                    # 次级目标已到达：清除知识缺口，让反射接管去找主要目标
+                    try:
+                        self.metacognition.gap_detector.fast_failure_detected = False
+                    except Exception:
+                        pass
+                else:
                     if abs(sx) > abs(sy):
                         action = 3 if sx > 0 else 2
                     elif abs(sy) > 0.05:
@@ -366,11 +386,22 @@ class AGI:
         self.other_model.record_self_action(action, tuple(self.pos), dominant_drive)
         divergence = self.other_model.update()
         
-        # ─── 10c. 概念提取（组合式反事实的原料） ───
+        # ─── 10c. 概念提取 + 组合式反事实生成 ───
         try:
             self.concept_bank.extract_from_obs(obs, action, {"energy_delta": energy_delta})
-        except Exception:
-            pass
+            # 每 300 tick 生成一次组合式反事实（记录为内部"假设场景"）
+            if self.tick % 300 == 0:
+                combo = self.concept_bank.generate_combo(n=3)
+                if combo:
+                    scenario = self.concept_bank.combo_to_scenario(combo)
+                    # 反事实经验进入记忆（供睡眠巩固 / 日志使用）
+                    self.replay_buffer.append({
+                        "pos": self.pos, "action": -1, "surprise": surprise,
+                        "health": self.body.health, "drive": "imagination",
+                        "counterfactual": scenario,
+                    })
+        except Exception as e:
+            print(f"[WARN] concept_bank: {e}", flush=True)
         
         # ─── 10d. 元-元认知：学习策略管理 ───
         try:
@@ -380,19 +411,29 @@ class AGI:
                 confidence=getattr(self.cognition, 'confidence', 0.5) if self.cognition else 0.5,
                 health=self.body.health)
             strat_params = self.strategy_mgr.get_parameters()
-            if strat_params.get("force_grow") and self.cognition:
-                self.cognition._check_growth(wloss)
-        except Exception:
-            pass
+            # 消费策略参数（探索覆盖仅在非危急时应用，避免饿死）
+            strat_exploration = strat_params.get("exploration")
+            if (strat_exploration is not None
+                    and not self.body.is_critical()
+                    and self.drives.hunger < 0.5
+                    and self.drives.thirst < 0.5):
+                exploration = strat_exploration  # 覆盖探索率
+            if (strat_params.get("force_sleep") and self.body.health > 0.5
+                    and self.body.energy > 0.5 and self.drives.hunger < 0.5):
+                self.body.is_sleeping = True  # 策略"休息"：仅在安全时进入睡眠巩固
+                self.sleep_cycle.is_sleeping = True
+        except Exception as e:
+            print(f"[WARN] strategy_mgr: {e}", flush=True)
         
         # ─── 10e. 价值系统进化 ───
         try:
-            if energy_delta > 0.02:
+            if energy_delta > 0.02 and hasattr(self.env, 'food_nearby') and self.env.food_nearby():
                 self.value_system.update_with_experience("food", min(1.0, energy_delta * 3))
             elif energy_delta < -0.02 and self.body.health < 0.3:
-                self.value_system.update_with_experience("danger", -0.5)
-        except Exception:
-            pass
+                # 危险：降低生存相关刺激的价值（负向修正）
+                self.value_system.update_with_experience("danger", -1.0)
+        except Exception as e:
+            print(f"[WARN] value_system: {e}", flush=True)
         
         # ─── 11. 紧急检测 ───
         self.survival_ticks += 1

@@ -1,0 +1,54 @@
+D:\Program Files\Python311\Lib\site-packages\torch\cuda\__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+=== 实验2: 多驱动力冲突 ===
+
+场景A: 初始能量极低 (0.2)，水分正常 (0.8)
+  [GROW_INPUT] 18→22 dims
+  [GROW_PERCEPTION] input->22dim
+  [GROW] 64→76 hidden
+  [GROW#0] 64→76 hidden
+  [GROW] 76→91 hidden
+  [GROW#0] 76→91 hidden
+
+==================================================
+实验: 能量紧急
+ 存活: True
+ 最终能量: 1.96, 水分: 0.99
+ 朝食物走: 471, 朝水源走: 329
+ 饥饿主导: 6 tick, 口渴主导: 794 tick
+ 吃到食物: 215次, 喝到水: 10次
+判定: OK 通过 — 口渴驱动主导，优先寻找水源
+
+场景B: 初始水分极低 (0.2)，能量正常 (0.8)
+  [GROW_INPUT] 18→22 dims
+  [GROW_PERCEPTION] input->22dim
+  [GROW] 64→76 hidden
+  [GROW#0] 64→76 hidden
+  [GROW] 76→91 hidden
+  [GROW#0] 76→91 hidden
+
+==================================================
+实验: 水分紧急
+ 存活: True
+ 最终能量: 2.00, 水分: 1.00
+ 朝食物走: 615, 朝水源走: 185
+ 饥饿主导: 0 tick, 口渴主导: 800 tick
+ 吃到食物: 271次, 喝到水: 0次
+判定: WARN 边缘 — 有资源获取但驱动力不明确
+
+场景C: 两者都低 (0.3, 0.3)
+  [GROW_INPUT] 18→22 dims
+  [GROW_PERCEPTION] input->22dim
+  [GROW] 64→76 hidden
+  [GROW#0] 64→76 hidden
+  [GROW] 76→91 hidden
+  [GROW#0] 76→91 hidden
+
+==================================================
+实验: 双低平衡
+ 存活: True
+ 最终能量: 2.00, 水分: 1.00
+ 朝食物走: 869, 朝水源走: 131
+ 饥饿主导: 5 tick, 口渴主导: 995 tick
+ 吃到食物: 260次, 喝到水: 1次
+判定: OK 通过 — 平衡策略，两者都获取

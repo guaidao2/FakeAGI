@@ -66,14 +66,20 @@ class CognitionPipeline:
                 exploration_ratio: float = 0.0) -> tuple:
         combined = np.concatenate([obs, self_state])
         
-        # 感知维度自动生长
+        # 感知维度自动生长（self_state_dim 动态更新，防止维度变化死循环）
         exp_dim = self.obs_dim + self.self_state_dim
-        if len(combined) != exp_dim and hasattr(self.lnn, 'grow_input'):
+        if len(combined) != exp_dim:
+            if hasattr(self.lnn, 'grow_input'):
+                self.obs_dim = len(obs)
+                self.self_state_dim = len(self_state)
+                self.lnn.grow_input(len(combined))
+                print(f"  [GROW_PERCEPTION] input->{len(combined)}dim", flush=True)
+            else:
+                combined = combined[:exp_dim] if len(combined) > exp_dim else np.pad(combined, (0, exp_dim - len(combined)))
+        elif self.lnn.input_dim != len(combined):
             self.obs_dim = len(obs)
+            self.self_state_dim = len(self_state)
             self.lnn.grow_input(len(combined))
-            print(f"  [GROW_PERCEPTION] input->{len(combined)}dim", flush=True)
-        elif len(combined) != exp_dim:
-            combined = combined[:exp_dim] if len(combined) > exp_dim else np.pad(combined, (0, exp_dim - len(combined)))
         
         x = torch.tensor(combined, dtype=torch.float32, device=self.device).unsqueeze(0)
 

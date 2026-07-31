@@ -31,13 +31,14 @@ class LearningStrategyManager:
         self.strategy_history = deque(maxlen=100)
         self.switch_count = 0
         self.steps_on_current = 0
-        self.switch_threshold = 50  # 每个策略至少尝试 50 tick
+        self.switch_threshold = 200  # 每个策略至少尝试 200 tick（保守）
     
     def update(self, world_loss: float, surprise: float,
                confidence: float, health: float) -> str:
         """
         每 tick 调用。返回当前策略。
         监控误差趋势，必要时切换策略。
+        保守策略：仅当置信度低且长期无改善时才切换。
         """
         self.error_history.append(world_loss)
         self.steps_on_current += 1
@@ -53,8 +54,9 @@ class LearningStrategyManager:
                 0.9 * self.strategy_scores[self.current] + 0.1 * improvement
             )
             
-            # 切换条件：当前策略无明显改善 + 已尝试足够久
-            if (improvement < 0.001 and self.steps_on_current > self.switch_threshold):
+            # 切换条件（保守）：置信度低 + 当前策略长期无改善
+            if (confidence < 0.3 and improvement < 0.0005
+                    and self.steps_on_current > self.switch_threshold):
                 self._switch()
         
         return self.current

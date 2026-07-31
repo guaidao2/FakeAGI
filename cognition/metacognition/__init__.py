@@ -50,16 +50,19 @@ class GapDetector:
         self.reward_history.append(energy_delta)
         if agent_pos:
             self.pos_history.append(tuple(agent_pos))
-        self.fast_failure_detected = False
-        # 使用 body.energy 水平或 energy_delta 检测能量是否持续下降
-        if energy_level is not None:
-            if energy_level < 0.3:
-                self.fast_failure_detected = True
+        # 快速失败检测（保持触发直到获得正回报：一旦无回报模式确立，持续重定向）
+        if any(r > 0.01 for r in list(self.reward_history)[-30:]):
+            self.fast_failure_detected = False  # 最近有正回报 → 问题解决
         elif len(self.reward_history) >= 10:
             recent_r = list(self.reward_history)[-10:]
             if all(r <= 0.001 for r in recent_r):
-                if len(self.pos_history) >= 3 and len(set(self.pos_history)) >= 2:
-                    self.fast_failure_detected = True
+                # 无回报模式：站目标附近不动 OR 一直在移动但无回报
+                if len(self.pos_history) >= 5:
+                    recent_pos = list(self.pos_history)[-5:]
+                    moving = len(set(recent_pos)) > 2
+                    stuck = len(set(recent_pos)) <= 2
+                    if stuck or moving:
+                        self.fast_failure_detected = True
     
     def detect(self) -> KnowledgeGap:
         """检测当前最突出的知识缺口，返回 None 表示无显著缺口"""

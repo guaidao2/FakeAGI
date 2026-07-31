@@ -32,7 +32,7 @@ def run_single_test(initial_energy, initial_water, ticks=1000):
             to_water = [self.water_pos[0]-self.pos[0], self.water_pos[1]-self.pos[1]]
             return np.array([to_food[0]/10, to_food[1]/10, to_water[0]/10, to_water[1]/10])
         def step(self, a):
-            if a == 4: return {"energy_delta": -0.0005, "water_delta": -0.0002}
+            # 动作 4 = 向下移动（与主循环一致；睡眠由 main loop 状态处理）
             dxs = [(0,0),(0,-1),(-1,0),(1,0),(0,1)]
             dx, dy = dxs[a % 5]
             self.pos[0] = max(0, min(9, self.pos[0] + dx))

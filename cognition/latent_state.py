@@ -72,15 +72,18 @@ class LatentStateModel:
             return True
         return False
     
-    def get_context_vector(self) -> np.ndarray:
-        """隐变量上下文（拼接到世界模型输入）"""
+    def get_context_vector(self, fixed_dim: int = 4) -> np.ndarray:
+        """隐变量上下文（固定维度，防止触发感知生长）"""
         vecs = []
         for name, lat in self.latents.items():
             vecs.append(lat.value)
             vecs.append(lat.uncertainty)
         if not vecs:
-            return np.zeros(2, dtype=np.float32)
-        return np.concatenate(vecs)
+            return np.zeros(fixed_dim, dtype=np.float32)
+        ctx = np.concatenate(vecs)
+        if len(ctx) >= fixed_dim:
+            return ctx[:fixed_dim]
+        return np.pad(ctx, (0, fixed_dim - len(ctx)))
     
     def explain(self) -> list:
         """返回当前隐变量解释（供日志/语言输出）"""
