@@ -33,6 +33,7 @@ class OrganGenerator:
         self.next_organ_id = 0
         self.generation_count = 0
         self.pruned_count = 0
+        self._active_candidate = None     # 当前轮换评估的候选 organ_id
 
     # ─── 模态类型推断（从输入特征）───
     @staticmethod
@@ -46,7 +47,7 @@ class OrganGenerator:
     # ─── 生成候选器官（超量生成）───
     def generate_candidates(self, modality: str, input_dim: int,
                             n_candidates: int = 3) -> list:
-        """为某模态生成多个候选器官（不同原语组合）"""
+        """为某模态生成多个候选器官（不同原语组合），写入 candidates 池"""
         cands = []
         registry = PRIMITIVE_REGISTRY.get(modality, [LinearPatch, NormPatch])
         for i in range(n_candidates):
@@ -71,6 +72,7 @@ class OrganGenerator:
                           modality=modality)
             self.next_organ_id += 1
             cands.append(organ)
+        self.candidates[modality] = cands
         return cands
 
     # ─── 竞争期推进 ───
@@ -83,6 +85,28 @@ class OrganGenerator:
             organ.update_fitness(err)
             organ.age += 1
 
+    # ─── 候选器官轮流评估（Blocking 修复：让候选真的处理输入）───
+    def evaluate_candidates(self, modality: str, obs: np.ndarray,
+                            device) -> np.ndarray:
+        """
+        竞争期：所有候选轮流 forward 同一观测，返回它们各自的输出。
+        调用方（pipeline）用每个候选的输出计算预测误差，写入 organ_errors。
+        """
+        if modality not in self.candidates or not self.candidates[modality]:
+            return obs
+        cands = self.candidates[modality]
+        # 轮换使用：本 tick 用 age % len(cands) 号候选
+        idx = cands[0].age % len(cands)
+        organ = cands[idx]
+        try:
+            obs_t = torch.tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
+            out = organ.to(device)(obs_t).detach().cpu().numpy().flatten()
+            self._active_candidate = organ.organ_id
+            return out
+        except Exception:
+            self._active_candidate = None
+            return obs
+
     # ─── 竞争结算（选择/凋亡）───
     def settle_competition(self, modality: str):
         """竞争期结束：fitness 最优保留，其余凋亡"""
@@ -94,12 +118,17 @@ class OrganGenerator:
         # 选择 fitness 最高者
         best = max(cands, key=lambda o: o.fitness)
         best.mature = True
+        # 重置 base_error（成熟后进入下一阶段，基准重新建立）
+        best.base_error = None
+        best.fitness = 0.0
+        best.error_history = []
         if modality not in self.registry:
             self.registry[modality] = []
         self.registry[modality].append(best)
         self.pruned_count += len(cands) - 1
         # 清空候选
         self.candidates[modality] = []
+        self._active_candidate = None
         self.generation_count += 1
         return best
 

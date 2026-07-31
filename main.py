@@ -288,7 +288,9 @@ class AGI:
                 exploration = 0.2
             
             # 误差通路：行动通路 → 提高探索率（在 process 之前生效）
-            action, info = self.cognition.process(obs, self_state, exploration)
+            action, info = self.cognition.process(
+                obs, self_state, exploration,
+                survival_state=self.body.integrity)
             # P4: 观测变化 → 全链路协调生长
             try:
                 self._coordinated_growth()

@@ -15,6 +15,7 @@ P6 结构原语库 — 可生长器官的构建单元
 
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 class PatchBase(nn.Module):
@@ -44,23 +45,30 @@ class ConvPatch(PatchBase):
                               padding=kernel // 2)
         self._identity = False  # 可学习
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def _to_image(self, x: torch.Tensor):
+        """任意 1D 展平 → [batch, ch, H, W]（动态算 side，非平方时 pad）"""
         if x.dim() == 2:
-            # [batch, in_dim] → [batch, 1, H, W]
-            batch = x.shape[0]
-            side = int(round(self.in_dim ** 0.5))
-            x = x.view(batch, 1, side, side)
-        elif x.dim() == 3:
-            # [batch, channels, flat] → [batch, channels, H, W]
+            batch, flat = x.shape
+            ch = 1
+        else:
             batch, ch, flat = x.shape
-            side = int(round(flat ** 0.5))
-            x = x.view(batch, ch, side, side)
-        out = self.conv(x)  # [batch, out_channels, H, W]
+        side = int(np.ceil(np.sqrt(flat)))
+        padded = side * side - flat
+        if padded > 0:
+            pad = torch.zeros(batch, ch, padded, device=x.device)
+            x = torch.cat([x.reshape(batch, ch, flat), pad], dim=-1)
+        else:
+            x = x.reshape(batch, ch, flat)
+        return x.view(batch, ch, side, side)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        img = self._to_image(x)
+        out = self.conv(img)  # [batch, out_channels, H, W]
         # 展平到 2D：[batch, out_channels*H*W]
         return out.flatten(1)
 
     def expected_out(self, in_dim: int) -> int:
-        side = int(round(in_dim ** 0.5))
+        side = int(np.ceil(np.sqrt(in_dim)))
         return self.out_channels * side * side
 
 
@@ -76,22 +84,25 @@ class PoolPatch(PatchBase):
         self._identity = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # 动态 side + 非平方 pad（与 ConvPatch 相同策略）
         if x.dim() == 2:
-            batch = x.shape[0]
-            side = int(round(self.in_dim ** 0.5))
-            x = x.view(batch, 1, side, side)
-            out = self.pool(x)
-            return out.flatten(1)
-        if x.dim() == 3:
+            batch, flat = x.shape
+            ch = 1
+        else:
             batch, ch, flat = x.shape
-            side = int(round(flat ** 0.5))
-            x = x.view(batch, ch, side, side)
-            out = self.pool(x)
-            return out.flatten(1)
-        return self.pool(x).flatten(1)
+        side = int(np.ceil(np.sqrt(flat)))
+        padded = side * side - flat
+        if padded > 0:
+            pad = torch.zeros(batch, ch, padded, device=x.device)
+            x = torch.cat([x.reshape(batch, ch, flat), pad], dim=-1)
+        else:
+            x = x.reshape(batch, ch, flat)
+        img = x.view(batch, ch, side, side)
+        out = self.pool(img)
+        return out.flatten(1)
 
     def expected_out(self, in_dim: int) -> int:
-        side = int(round(in_dim ** 0.5))
+        side = int(np.ceil(np.sqrt(in_dim)))
         ns = max(1, side // self.kernel)
         return ns * ns
 
