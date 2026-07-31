@@ -26,6 +26,7 @@ from cognition.latent_state import LatentStateModel
 from cognition.attention import AttentionGate
 from cognition.concept_bank import ConceptBank
 from cognition.decision.committee import DecisionCommittee
+from cognition.decision.moe import MoERouter
 from core.physics_intuition import PhysicsPrior
 from core.value_system import EvolvableValueSystem
 from core.persistence import save_checkpoint, load_checkpoint
@@ -67,6 +68,9 @@ class AGI:
         self.metacognition = MetacognitionLayer(spatial_memory=self.spatial_memory)
         self.committee = DecisionCommittee(n_actions=5)
         self.committee_state = None
+        # P1: MoE 专家路由（延迟创建——state_dim 由认知维度决定）
+        self.moe = None
+        self.moe_state_dim = None
         self.override_action = -1
         self._food_recently_tick = -1000
         self.causal_error = 0.0
@@ -99,6 +103,33 @@ class AGI:
         if len(obs) >= 5:
             return obs[4] > 0.5  # 开关已触发标志
         return len(obs) >= 4 and abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
+    
+    def _ensure_moe(self):
+        """延迟创建 MoE 路由器（state_dim 由认知维度决定）"""
+        if self.moe is not None:
+            return
+        state_dim = 16
+        if self.cognition is not None and getattr(self.cognition, 'hidden', None) is not None:
+            hd = self.cognition.hidden.shape[1]
+            state_dim = max(8, min(hd, 32))
+        self.moe_state_dim = state_dim
+        self.moe = MoERouter(state_dim=state_dim, n_actions=5,
+                             max_experts=6, top_k=2,
+                             device="cuda" if __import__('torch').cuda.is_available() else "cpu")
+    
+    def _moe_state_vector(self) -> np.ndarray:
+        """MoE 专家状态向量（隐状态压缩 + 驱动）"""
+        sd = self.moe_state_dim or 16
+        parts = []
+        if self.cognition is not None and getattr(self.cognition, 'hidden', None) is not None:
+            h = self.cognition.hidden.detach().cpu().numpy().flatten()
+            parts.append(h[:8] if len(h) >= 8 else np.pad(h, (0, 8 - len(h))))
+        drive_vec = self.drives.get_state_vector()
+        parts.append(drive_vec[:4] if len(drive_vec) >= 4 else np.pad(drive_vec, (0, 4 - len(drive_vec))))
+        vec = np.concatenate(parts)[:sd]
+        if len(vec) < sd:
+            vec = np.pad(vec, (0, sd - len(vec)))
+        return vec.astype(np.float32)
     
     def step(self):
         """单 tick 自维持循环"""
@@ -234,6 +265,7 @@ class AGI:
                         self.override_action = 3 if dx_t > 0 else (2 if dx_t < 0 else (4 if dy_t > 0 else 1))
             
             # ─── 7c. 人脑式决策委员会：并行投票 + 加权仲裁 ───
+            self._ensure_moe()
             if self.committee is not None:
                 # 1. 反射投票（本能：朝主要目标）
                 reflex_v = self.committee.reflex_vote(
@@ -273,7 +305,22 @@ class AGI:
                     except Exception:
                         meta_v = None
                 
-                # 加权仲裁
+                # P1: MoE 专家路由（情境 → 专家激活，作为额外决策层）
+                moe_action = None
+                self.moe_activations = {}
+                if (self.moe is not None and len(obs) > 0):
+                    try:
+                        moe_state = self._moe_state_vector()
+                        activations, _ = self.moe.route(obs, moe_state, surprise)
+                        self.moe_activations = activations
+                        if activations:
+                            a, _ = self.moe.get_action(activations, moe_state)
+                            if a is not None:
+                                moe_action = a
+                    except Exception:
+                        pass
+                
+                # 加权仲裁（委员会 + MoE 融合：MoE 动作优先，专家置信度高时）
                 decision = self.committee.decide(
                     {"reflex": reflex_v, "limbic": limbic_v,
                      "habit": habit_v, "plan": plan_v, "meta": meta_v},
@@ -284,6 +331,11 @@ class AGI:
                     exploration_ratio=exploration)
                 action = decision["action"]
                 self.committee_state = decision
+                # MoE 专家决策覆盖（仅在专家池成熟且置信时）
+                if (moe_action is not None and self.moe is not None
+                        and len(self.moe.experts) >= 1
+                        and gamenn_confidence < 0.1):
+                    action = moe_action
             
             # GameNN 学习：基于能量变化的奖励信号（用 LNN hidden 作状态）
             if (hasattr(self.cognition, 'gamenn') and self.cognition.hidden is not None):
@@ -296,6 +348,17 @@ class AGI:
                     s = s[:sd]
                 reward = energy_delta * 10 + damage * (-5)
                 g.learn(reward, next_state=s)
+            
+            # P1: MoE 专家在线学习（被激活的专家学习自己的领域）
+            if (self.moe is not None and self.moe_activations
+                    and getattr(self.cognition, 'hidden', None) is not None):
+                try:
+                    moe_s = self._moe_state_vector()
+                    self.moe.learn(self.moe_activations, moe_s, action,
+                                   reward=energy_delta * 10,
+                                   next_state=None)
+                except Exception:
+                    pass
             
             # 睡眠由驱动力触发状态（不是动作 4；睡眠是状态，动作编号 4 = down）
             if drive_bias[4] > 0.7 and self.body.energy > 0.5 and not self.body.is_sleeping:

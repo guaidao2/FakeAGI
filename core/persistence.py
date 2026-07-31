@@ -62,6 +62,13 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
         except Exception as e:
             print(f"[PERSIST] cognition 保存失败: {e}")
 
+    # 1b. MoE 专家路由（P1）
+    if getattr(agi, 'moe', None) is not None:
+        try:
+            data["moe"] = agi.moe.get_state_dict()
+        except Exception as e:
+            print(f"[PERSIST] moe 保存失败: {e}")
+
     # 2. 价值系统（次级价值表）
     try:
         data["value_system"] = {
@@ -178,6 +185,14 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             print(f"[PERSIST] 认知核心已恢复 (hidden={c.get('hidden_dim')})")
         except Exception as e:
             print(f"[PERSIST] cognition 恢复失败: {e}")
+
+    # 1b. MoE 专家路由恢复
+    if "moe" in data and getattr(agi, 'moe', None) is not None:
+        try:
+            agi.moe.load_state_dict(data["moe"])
+            print(f"[PERSIST] MoE 专家池已恢复 ({len(agi.moe.experts)} 专家)")
+        except Exception as e:
+            print(f"[PERSIST] moe 恢复失败: {e}")
 
     # 2. 价值系统
     if "value_system" in data:
