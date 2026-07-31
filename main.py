@@ -28,6 +28,7 @@ from cognition.concept_bank import ConceptBank
 from cognition.decision.committee import DecisionCommittee
 from core.physics_intuition import PhysicsPrior
 from core.value_system import EvolvableValueSystem
+from core.persistence import save_checkpoint, load_checkpoint
 
 
 class AGI:
@@ -83,6 +84,15 @@ class AGI:
     
     def set_env(self, env):
         self.env = env
+    
+    # ─── P0: Checkpoint 持久化（跨 session 身份连续性） ───
+    def save(self, tag: str = "latest", path: str = None) -> str:
+        """保存当前状态（供死亡/退出时自主调用）"""
+        return save_checkpoint(self, path=path, tag=tag)
+    
+    def load(self, tag: str = "latest", path: str = None) -> bool:
+        """加载先前状态（启动时调用）"""
+        return load_checkpoint(self, path=path, tag=tag)
     
     def _secondary_reached(self, obs) -> bool:
         """次级目标（如开关）是否已到达"""
@@ -448,6 +458,12 @@ class AGI:
         
         if self.body.health <= 0.0 or self.body.energy <= 0.0:
             self.alive = False
+            # 死亡时自主保存（让"经验"延续到下一代/下一次运行）
+            if self.cfg.get("auto_save_on_death", True):
+                try:
+                    self.save(tag="death")
+                except Exception as e:
+                    print(f"[PERSIST] 死亡保存失败: {e}")
         
         # ─── 记录 ───
         self.last_action = action
