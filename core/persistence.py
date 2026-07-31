@@ -171,10 +171,11 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             wm_sd = c["world_model"]
             wm = agi.cognition.world_model
             if hasattr(wm, "branches") and any(k.startswith("branches.") for k in wm_sd):
+                # 新档：完整含 branches.* → 严格加载
+                wm.load_state_dict(wm_sd)
+            else:
                 # 旧档无 branches.* → 保持默认初始化，仅加载匹配部分
                 wm.load_state_dict(wm_sd, strict=False)
-            else:
-                wm.load_state_dict(wm_sd)
             if "expert_world" in c:
                 try:
                     # 先 grow 到保存时的 hidden 维度（形状匹配）
