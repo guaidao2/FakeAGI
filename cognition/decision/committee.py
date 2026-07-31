@@ -53,10 +53,17 @@ class DecisionCommittee:
         return vote
     
     def limbic_vote(self, drive_bias: np.ndarray) -> np.ndarray:
-        """边缘系统投票：驱动力偏置直接映射为动作支持"""
+        """边缘系统投票：驱动力偏置映射为动作支持（修正索引错位）
+        drive_bias 格式: [up, left, right, down, sleep, explore]
+        动作编号: 0=stay, 1=up, 2=left, 3=right, 4=down
+        """
         vote = np.zeros(self.n_actions)
-        if drive_bias is not None and len(drive_bias) >= self.n_actions:
-            vote = np.clip(drive_bias[:self.n_actions], 0, 1).astype(float)
+        if drive_bias is not None and len(drive_bias) >= 4:
+            # 重映射: up→1, left→2, right→3, down→4
+            vote[1] = drive_bias[0]  # up
+            vote[2] = drive_bias[1]  # left
+            vote[3] = drive_bias[2]  # right
+            vote[4] = drive_bias[3]  # down
         return vote
     
     def habit_vote(self, gamenn_probs: np.ndarray) -> np.ndarray:

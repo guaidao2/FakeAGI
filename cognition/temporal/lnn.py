@@ -41,6 +41,9 @@ class LTCell(nn.Module):
         # 克隆旧权重到 CPU（新建的 Linear 默认在 CPU 上）
         old_Wx_weight = self.W_x.weight.data.clone().cpu()
         old_Wh_weight = self.W_h.weight.data.clone().cpu()
+        # 保存旧 tau_net 权重（生长时保留已学到的时序动力学）
+        old_tau_w = self.tau_net[0].weight.data.clone().cpu()
+        old_tau_b = self.tau_net[0].bias.data.clone().cpu()
         
         self.W_x = nn.Linear(new_in, new_hidden, bias=False)
         self.W_h = nn.Linear(new_hidden, new_hidden, bias=False)
@@ -53,6 +56,9 @@ class LTCell(nn.Module):
             h_in = min(old_h, new_in)
             self.W_x.weight[:old_h, :h_in] = old_Wx_weight[:, :h_in]
             self.W_h.weight[:old_h, :old_h] = old_Wh_weight
+            # tau_net 权重迁移：保留旧输入→旧输出部分
+            self.tau_net[0].weight[:old_h, :old_h * 2] = old_tau_w[:old_h, :old_h * 2]
+            self.tau_net[0].bias[:old_h] = old_tau_b[:old_h]
         
         self.hidden_dim = new_hidden
         self.input_dim = new_in
@@ -92,13 +98,17 @@ class LNN(nn.Module):
         if new_h <= old_h:
             return
         old_enc = self.encoder.weight.data.clone().cpu()
+        old_enc_bias = self.encoder.bias.data.clone().cpu()
         old_out = self.output_layer.weight.data.clone().cpu()
+        old_out_bias = self.output_layer.bias.data.clone().cpu()
         self.ltc.expand(new_h)
         self.encoder = nn.Linear(self.input_dim, new_h)
         self.output_layer = nn.Linear(new_h, new_h)
         with torch.no_grad():
             self.encoder.weight[:old_h, :] = old_enc
+            self.encoder.bias[:old_h] = old_enc_bias
             self.output_layer.weight[:old_h, :old_h] = old_out
+            self.output_layer.bias[:old_h] = old_out_bias
             # 新神经元稀疏初始化：只随机连接少量旧神经元（稀疏突触生长）
             n_new = new_h - old_h
             rng = np.random.default_rng()

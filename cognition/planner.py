@@ -66,18 +66,16 @@ class Planner:
                 h_energy = torch.mean(torch.abs(h)).item()
                 noise = h_energy * 0.1
                 
-                # 模拟前向传播（从 LNN 取 encoder 输出）
-                # 世界模型预测的是 h_{t+1}，这就是模拟的下一步状态
-                for action_idx in range(self.n_actions):
-                    # 用预测的 h 作为下一步的输入
-                    next_h = pred_h.clone()
+                # 模拟前向传播：对每个候选动作，用其对应的预测状态展开
+                for action_idx, (a, pred_h_a) in enumerate(candidates):
+                    next_h = pred_h_a.clone()
                     # 对每个动作评估未来奖励（简化：基于 hidden 幅值）
                     reward = float(torch.tanh(torch.mean(next_h)).item()) + np.random.randn() * noise
                     
                     score = node["score"] + reward * (0.9 ** depth)  # 折扣
                     new_node = {
                         "hidden": next_h,
-                        "actions": node["actions"] + [action_idx],
+                        "actions": node["actions"] + [a],
                         "score": score,
                         "trajectory": node["trajectory"] + [float(reward)],
                         "parent": node_idx,

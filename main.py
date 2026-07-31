@@ -231,13 +231,13 @@ class AGI:
                     secondary_reached=self._secondary_reached(obs))
                 # 2. 边缘系统投票（驱动力偏置）
                 limbic_v = self.committee.limbic_vote(drive_bias)
-                # 3. 习惯投票（GameNN 概率）
+                # 3. 习惯投票（GameNN 概率，用 LNN hidden 作为状态）
                 habit_v = None
-                if hasattr(self.cognition, 'gamenn'):
+                if hasattr(self.cognition, 'gamenn') and self.cognition.hidden is not None:
                     g = self.cognition.gamenn
                     if hasattr(g, 'get_action_probs'):
                         sd = g.state_dim
-                        s = np.asarray(self_state, dtype=np.float32)
+                        s = self.cognition.hidden.detach().cpu().numpy().flatten()
                         if len(s) < sd:
                             s = np.pad(s, (0, sd - len(s)))
                         else:

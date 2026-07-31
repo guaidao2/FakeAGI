@@ -215,8 +215,6 @@ class CognitionPipeline:
         # GameNN 同步扩展
         self.gamenn.grow_state_dim(new_h)
         self.growth_cooldown = 500
-        # 扩展 GameNN 维度以匹配新的 LNN 容量
-        self.gamenn.grow_state_dim(new_h)
         self._growth_losses = []
         print(f"  [GROW#{self.growth_count}] {old_h}→{new_h} hidden", flush=True)
 
