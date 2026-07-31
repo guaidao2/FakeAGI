@@ -124,6 +124,17 @@ def test():
     understood = err_word < err_rand * 0.9
 
     # ─── 阶段3：说话 — 内部状态→词选择（状态参与，非词循环）───
+    # 重新采集**无词** hidden 样本（训练与测试分布一致：hidden 不含词）
+    hidden_samples = []
+    no_word_words = []
+    agi.cognition.language_tokens = None
+    for _ in range(200):
+        env.pos = np.random.randint(0, 10, 2).tolist()
+        agi.step()
+        if agi.cognition.last_lnn_out is not None:
+            hidden_samples.append(
+                agi.cognition.last_lnn_out.detach().cpu().numpy().flatten())
+            no_word_words.append(env.get_language())
     # 统一 hidden 维度（LNN 生长会导致维度变化，截断到最小）
     if hidden_samples:
         min_dim = min(len(h) for h in hidden_samples)
@@ -131,7 +142,7 @@ def test():
     else:
         hidden_arr = np.zeros((1, 64))
     word_arr = []
-    for ws in word_samples[:len(hidden_arr)]:
+    for ws in no_word_words[:len(hidden_arr)]:
         tok = lang.tokenize(ws)
         word_arr.append(tok[0] if tok else 0)
     # word_probe 输入维度对齐 hidden 截断维度
@@ -158,26 +169,27 @@ def test():
             loss_p = loss_fn(logits, Wt)
             loss_p.backward()
             optimizer.step()
-        # 测试：新状态 → hidden → 词
+        # 测试：新状态 → hidden（**不含词**：language_tokens=None，只喂观测状态）
         correct = 0; total = 0
         for _ in range(100):
             pos = np.random.randint(0, 10, 2)
             env.pos = pos.tolist()
             words = env.get_language()
             obs = env.observe()
-            # 用真实 hidden：运行一步获取 last_lnn_out
-            agi.cognition.language_tokens = words
+            # 关键：清空语言输入，让 hidden 只反映观测状态（真正测试状态→词）
+            agi.cognition.language_tokens = None
             agi.step()
             if agi.cognition.last_lnn_out is not None:
                 h = agi.cognition.last_lnn_out.detach().cpu().numpy().flatten()
-                with torch.no_grad():
-                    logits = organ.word_probe(
-                        torch.tensor(h[:probe_in], dtype=torch.float32).unsqueeze(0))
-                    pred = VOCAB[logits.argmax().item()]
-                tok_ids = lang.tokenize(words)
-                if tok_ids:
-                    correct += (pred == words[0])
-                    total += 1
+                if len(h) >= probe_in:
+                    with torch.no_grad():
+                        logits = organ.word_probe(
+                            torch.tensor(h[:probe_in], dtype=torch.float32).unsqueeze(0))
+                        pred = VOCAB[logits.argmax().item()]
+                    tok_ids = lang.tokenize(words)
+                    if tok_ids:
+                        correct += (pred == words[0])
+                        total += 1
         acc = correct / max(1, total)
     else:
         acc = 0.0

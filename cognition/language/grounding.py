@@ -90,7 +90,8 @@ class LinguisticOrgan(nn.Module):
             if self.word_probe.bias is not None else None
         self.vocab_size = new_size
         self.token_embed = nn.Embedding(new_size, self.embed_dim)
-        self.word_probe = nn.Linear(self.output_dim, new_size)
+        # 保留 probe 输入维度（说话路径），只扩展输出（词表）
+        self.word_probe = nn.Linear(self.word_probe.in_features, new_size)
         with torch.no_grad():
             self.token_embed.weight[:old_emb.shape[0]] = old_emb
             self.word_probe.weight[:old_probe.shape[0]] = old_probe
