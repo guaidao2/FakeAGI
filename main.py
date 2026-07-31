@@ -127,8 +127,8 @@ class AGI:
         hungry = 1.0 - min(1.0, self.body.energy / 0.6)   # energy 低→饥饿强
         thirsty = 1.0 - min(1.0, self.body.water / 0.6)
         need = max(hungry, thirsty)
-        # 说话概率 = 需求为主（信任仅作下限保底：需求驱动说话是意图核心）
-        prob = need * max(0.8, self._speak_trust)
+        # 说话概率 = 需求 × 说话信任（信任可观测：说话有用→trust 升→更常说）
+        prob = need * self._speak_trust
         if np.random.random() < prob:
             word = "food" if hungry >= thirsty else "water"
             self.last_spoken_word = word

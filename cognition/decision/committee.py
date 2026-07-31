@@ -123,7 +123,10 @@ class DecisionCommittee:
             w["habit"] = 0.20
             w["plan"] = 0.20
             w["meta"] = 0.15
-            return w
+            w["language"] = 0.10  # 深思时语言权重压低（多路证据仲裁）
+            # 归一化（与正常/恐慌分支尺度一致）
+            total = sum(w.values())
+            return {k: v / total for k, v in w.items()}
         
         # 能量低：边缘系统（驱动力）权重上升
         if energy < 0.4:
@@ -165,13 +168,18 @@ class DecisionCommittee:
 
         # P8b 意图优先：主动请求的语言指令（方向词）压过本能反射
         # 生物对应：问路后按指示走（前额叶指令 > 本能习惯）
-        if "language" in votes and votes["language"] is not None:
+        # 恐慌模式例外：危机时不听词（保命优先，与权重归零一致）
+        if ("language" in votes and votes["language"] is not None
+                and not self.panic_mode):
             lang_action = int(np.argmax(votes["language"]))
             if votes["language"][lang_action] > 0:
                 total[lang_action] += 0.6  # 指令加成（冲突时语言胜出）
                 self.last_votes["language"] = votes["language"].tolist()
-                # 加成后重算排序（否则加成被忽略）
+                # 加成后重算排序与冲突标志（否则加成被忽略）
                 sorted_idx = np.argsort(total)[::-1]
+                if len(sorted_idx) >= 2:
+                    gap = total[sorted_idx[0]] - total[sorted_idx[1]]
+                    self.conflict_mode = gap < 0.1 * max(1.0, total[sorted_idx[0]])
         
         # 探索
         if np.random.random() < exploration_ratio and not self.panic_mode:
