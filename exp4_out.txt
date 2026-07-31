@@ -3,25 +3,21 @@ D:\Program Files\Python311\Lib\site-packages\torch\cuda\__init__.py:61: FutureWa
 实验4: 因果推理 — 隐藏规则
   [GROW_INPUT] 18→24 dims
   [GROW_PERCEPTION] input->24dim
-  首次踩到开关: t=38
-  T40: pos=[1, 2] e=0.948 sleepy=False
-  T41: pos=[1, 1] e=0.947 sleepy=False
-  T42: pos=[1, 1] e=0.945 sleepy=False
-  T43: pos=[1, 0] e=0.944 sleepy=False
-  T44: pos=[2, 0] e=0.943 sleepy=False
-  T45: pos=[3, 0] e=0.941 sleepy=False
-  T46: pos=[3, 0] e=0.940 sleepy=False
-  T47: pos=[4, 0] e=0.938 sleepy=False
-  T48: pos=[3, 0] e=0.937 sleepy=False
-  T49: pos=[2, 0] e=0.936 sleepy=False
-  T50: pos=[3, 0] e=0.934 sleepy=False
-  T51: pos=[2, 0] e=0.933 sleepy=False
-  T52: pos=[2, 0] e=0.932 sleepy=False
-  T53: pos=[3, 0] e=0.930 sleepy=False
-  T54: pos=[3, 0] e=0.929 sleepy=False
-  T55: pos=[3, 1] e=0.928 sleepy=False
-  [GROW] 64→76 hidden
-  [GROW#0] 64→76 hidden
-  到达食物: t=111 (学会两步因果链)
+  首次踩到开关: t=37
+  T40: pos=[1, 0] e=0.945 sleepy=False
+  T41: pos=[1, 0] e=0.943 sleepy=False
+  T42: pos=[1, 1] e=0.942 sleepy=False
+  T43: pos=[2, 1] e=0.941 sleepy=False
+  T44: pos=[2, 0] e=0.940 sleepy=False
+  T45: pos=[2, 1] e=0.939 sleepy=False
+  T46: pos=[2, 1] e=0.938 sleepy=False
+  T47: pos=[2, 2] e=0.937 sleepy=False
+  T48: pos=[2, 3] e=0.936 sleepy=False
+  T49: pos=[3, 3] e=0.936 sleepy=False
+  T50: pos=[3, 4] e=0.934 sleepy=False
+  T51: pos=[4, 4] e=0.934 sleepy=False
+  T52: pos=[4, 4] e=0.932 sleepy=False
+  T53: pos=[4, 5] e=1.231 sleepy=False
+  到达食物: t=53 (学会两步因果链)
   踩开关: True, 吃到食物: True
   判定: OK 通过 — 系统学会【踩开关→门开→食物】因果链

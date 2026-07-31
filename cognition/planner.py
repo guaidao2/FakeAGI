@@ -105,6 +105,32 @@ class Planner:
         self.steps_into_plan += 1
         return self.planned_action
     
+    def get_plan_scores(self, hidden: torch.Tensor) -> np.ndarray:
+        """
+        返回所有动作的前瞻评分（供决策委员会投票）。
+        与 plan() 共用模拟逻辑，但输出完整的动作支持向量。
+        """
+        scores = np.zeros(self.n_actions)
+        if hidden is None or hidden.dim() != 2:
+            return scores
+        try:
+            # 单步展开：预测每个动作的下一步 hidden，用幅值作为预期效用
+            with torch.no_grad():
+                h = hidden.detach().clone()
+                for a in range(self.n_actions):
+                    act_t = torch.tensor([a], device=self.device)
+                    pred_h = self.world_model.predict(h, act_t)
+                    # 预期效用 = 预测状态的信息量（幅值）+ 小幅噪声
+                    util = float(torch.tanh(torch.mean(torch.abs(pred_h))).item())
+                    scores[a] = max(0.0, util)
+            # softmax 归一化为投票
+            if np.max(scores) > 0:
+                exp_s = np.exp(scores - np.max(scores))
+                scores = exp_s / np.sum(exp_s)
+        except Exception:
+            pass
+        return scores
+    
     def set_horizon(self, new_horizon: int):
         """生长时可扩展计划深度"""
         self.horizon = new_horizon

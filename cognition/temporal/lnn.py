@@ -7,6 +7,7 @@ LTCell 具备自适应时间常数 τ，使其能处理不同时间尺度的时�
 
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 class LTCell(nn.Module):
@@ -79,10 +80,17 @@ class LNN(nn.Module):
         return out, h_new, tau
     
     def grow(self, new_hidden: int = None):
-        """生长隐藏层"""
+        """生长隐藏层（增量式：每次只长 GROW_STEP 个神经元，像海马体新生）"""
         old_h = self.hidden_dim
         dev = self.encoder.weight.device
-        new_h = new_hidden or min(256, int(self.hidden_dim * 1.5))
+        # 增量生长：每次 +8 神经元（而非批量 ×1.2），新神经元稀疏连接
+        grow_step = 8
+        if new_hidden is not None:
+            new_h = new_hidden
+        else:
+            new_h = min(256, old_h + grow_step)  # 增量式上限 256
+        if new_h <= old_h:
+            return
         old_enc = self.encoder.weight.data.clone().cpu()
         old_out = self.output_layer.weight.data.clone().cpu()
         self.ltc.expand(new_h)
@@ -91,9 +99,22 @@ class LNN(nn.Module):
         with torch.no_grad():
             self.encoder.weight[:old_h, :] = old_enc
             self.output_layer.weight[:old_h, :old_h] = old_out
+            # 新神经元稀疏初始化：只随机连接少量旧神经元（稀疏突触生长）
+            n_new = new_h - old_h
+            rng = np.random.default_rng()
+            for i in range(n_new):
+                row = old_h + i
+                # 从旧神经元中随机选 ~20% 建立初始连接（其余为 0）
+                n_conn = max(2, int(old_h * 0.2))
+                conns = rng.choice(old_h, size=n_conn, replace=False)
+                vals = torch.tensor(rng.uniform(-0.1, 0.1, n_conn).astype(np.float32))
+                self.output_layer.weight[row, conns] = vals
+                enc_vals = torch.tensor(
+                    rng.uniform(-0.05, 0.05, self.input_dim).astype(np.float32))
+                self.encoder.weight[row, :] = enc_vals * 0.1
         self.hidden_dim = new_h
         self.to(dev)
-        print(f"  [GROW] {old_h}→{new_h} hidden", flush=True)
+        print(f"  [GROW] {old_h}→{new_h} hidden (+{n_new} 增量)", flush=True)
     
     def grow_input(self, new_input_dim: int):
         """扩展感知输入维度（保留已有权重）"""

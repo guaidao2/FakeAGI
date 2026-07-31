@@ -193,7 +193,8 @@ class CognitionPipeline:
 
         old_h = self.lnn.hidden_dim
         old_hidden = self.hidden.detach().clone() if self.hidden is not None else None
-        new_h = min(self.max_hidden, int(old_h * self.growth_factor))
+        # 增量式生长：每次 +8 神经元（像海马体新生），而非批量 ×1.2
+        new_h = min(self.max_hidden, old_h + 8)
         if new_h == old_h:
             return
 

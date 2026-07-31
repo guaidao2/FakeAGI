@@ -25,6 +25,7 @@ from cognition.metacognition.strategy_manager import LearningStrategyManager
 from cognition.latent_state import LatentStateModel
 from cognition.attention import AttentionGate
 from cognition.concept_bank import ConceptBank
+from cognition.decision.committee import DecisionCommittee
 from core.physics_intuition import PhysicsPrior
 from core.value_system import EvolvableValueSystem
 
@@ -63,6 +64,8 @@ class AGI:
         
         # ─── 第五层：元认知 ───
         self.metacognition = MetacognitionLayer(spatial_memory=self.spatial_memory)
+        self.committee = DecisionCommittee(n_actions=5)
+        self.committee_state = None
         self.override_action = -1
         self._food_recently_tick = -1000
         self.causal_error = 0.0
@@ -80,6 +83,12 @@ class AGI:
     
     def set_env(self, env):
         self.env = env
+    
+    def _secondary_reached(self, obs) -> bool:
+        """次级目标（如开关）是否已到达"""
+        if len(obs) >= 5:
+            return obs[4] > 0.5  # 开关已触发标志
+        return len(obs) >= 4 and abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
     
     def step(self):
         """单 tick 自维持循环"""
@@ -214,76 +223,58 @@ class AGI:
                     if abs(dx_t) > 0.05 or abs(dy_t) > 0.05:
                         self.override_action = 3 if dx_t > 0 else (2 if dx_t < 0 else (4 if dy_t > 0 else 1))
             
-            # 即使反射活跃，仍保留少量随机探索（防止永远学不到新策略）
-            explore_override = np.random.random() < 0.1 * (1.0 - gamenn_confidence)
-            if explore_override:
-                action = np.random.randint(1, 5)
-            
-            # 强制好奇探索：confidence 低 + 身体安全 → 完全抑制反射，纯探索
-            curiosity_explore = gamenn_confidence < 0.05 and self.body.health > 0.5
-            if curiosity_explore:
-                suppress_reflex = True
-                action = np.random.randint(1, 5)
-            
-            # 驱动力-观测直接映射（仅在反射未被抑制时生效）
-            if not suppress_reflex and len(obs) >= 4:
-                dx, dy = obs[0], obs[1]
-                always_seek = self.body.energy < 0.8 or self.drives.hunger > 0.2
-                # 次级目标已到达时，用主要目标（食物）做导航（用触发标志判定）
-                if len(obs) >= 5:
-                    secondary_reached = obs[4] > 0.5  # 开关已触发
-                else:
-                    secondary_reached = abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
-                if always_seek or secondary_reached:
-                    if abs(dx) > 0.05 or abs(dy) > 0.05:
-                        if abs(dx) > abs(dy):
-                            action = 3 if dx > 0 else 2
+            # ─── 7c. 人脑式决策委员会：并行投票 + 加权仲裁 ───
+            if self.committee is not None:
+                # 1. 反射投票（本能：朝主要目标）
+                reflex_v = self.committee.reflex_vote(
+                    obs, drive_bias, self.body.get_state_dict(),
+                    secondary_reached=self._secondary_reached(obs))
+                # 2. 边缘系统投票（驱动力偏置）
+                limbic_v = self.committee.limbic_vote(drive_bias)
+                # 3. 习惯投票（GameNN 概率）
+                habit_v = None
+                if hasattr(self.cognition, 'gamenn'):
+                    g = self.cognition.gamenn
+                    if hasattr(g, 'get_action_probs'):
+                        sd = g.state_dim
+                        s = np.asarray(self_state, dtype=np.float32)
+                        if len(s) < sd:
+                            s = np.pad(s, (0, sd - len(s)))
                         else:
-                            action = 4 if dy > 0 else 1
-                elif self.drives.curiosity > 0.3 and (self.drives.hunger < 0.2 or self.body.energy > 0.8):
-                    if abs(dx) > abs(dy) and abs(dx) > 0.05:
-                        action = 3 if dx > 0 else 2
-                    elif abs(dy) > 0.05:
-                        action = 4 if dy > 0 else 1
+                            s = s[:sd]
+                        habit_v = g.get_action_probs(s)
+                # 4. 规划投票（前瞻模拟，若有规划器）
+                plan_v = None
+                if hasattr(self.cognition, 'planner') and self.cognition.planner is not None:
+                    try:
+                        plan_v = self.cognition.planner.get_plan_scores(
+                            self.cognition.hidden)
+                    except Exception:
+                        plan_v = None
+                # 5. 元认知投票（知识缺口重定向）
+                meta_v = None
+                if self.metacognition is not None:
+                    try:
+                        mc_state = self.metacognition.get_state()
+                        if mc_state["override_action"] >= 0:
+                            meta_v = self.committee.meta_vote(
+                                mc_state["override_action"])
+                    except Exception:
+                        meta_v = None
+                
+                # 加权仲裁
+                decision = self.committee.decide(
+                    {"reflex": reflex_v, "limbic": limbic_v,
+                     "habit": habit_v, "plan": plan_v, "meta": meta_v},
+                    health=self.body.health,
+                    stress=self.body.stress,
+                    confidence=gamenn_confidence,
+                    energy=self.body.energy,
+                    exploration_ratio=exploration)
+                action = decision["action"]
+                self.committee_state = decision
             
-            # 应激-决策耦合: 高应激改变决策策略
-            if self.body.stress > 0.5 and self.body.health < 0.3:
-                # 恐慌模式：迷宫环境中 obs 含义不同，需检测环境类型
-                if not hasattr(self.env, 'maze'):
-                    dx, dy = obs[0], obs[1]
-                    if abs(dx) > abs(dy) and abs(dx) > 0.02:
-                        action = 3 if dx > 0 else 2
-                    elif abs(dy) > 0.02:
-                        action = 4 if dy > 0 else 1
-                else:
-                    action = np.random.randint(1, 5)
-            # 高应激时减少探索
-            if self.body.stress > 0.5:
-                exploration = max(0.05, exploration * 0.5)
-            
-            # 自模型更新（使用认知产生的惊奇）
-            self.self_model.update(energy_delta=energy_delta, integrity_delta=-damage, surprise=surprise)
-            self.self_model.energy = self.body.health
-            
-            # GameNN 学习：基于能量变化的奖励信号
-            if hasattr(self.cognition, 'gamenn') and len(self_state) >= self.cognition.gamenn.state_dim:
-                reward = energy_delta * 10 + damage * (-5)  # 能量上升=正奖励，受伤=负奖励
-                next_state = self_state[:self.cognition.gamenn.state_dim]
-                self.cognition.gamenn.learn(reward, next_state=next_state)
-            
-            # 驱动力偏置修正动作
-            if np.max(np.abs(drive_bias)) > 0.5:
-                biased_action = int(np.argmax(drive_bias[:4]))
-                if drive_bias[biased_action] > 0.3:
-                    action = biased_action
-            
-            # 好奇/无聊驱动→随机探索（始终有机会探索，但不覆盖生存需求）
-            if self.drives.hunger < 0.2 and self.drives.thirst < 0.3:
-                if (self.drives.curiosity > 0.3 or self.drives.boredom > 0.2) and not self.body.is_critical():
-                    if np.random.random() < 0.4:
-                        action = np.random.randint(0, 4)
-            
-            # 睡眠动作（睡眠优先于一切）
+            # 睡眠动作（睡眠优先于一切，由驱动力偏置决定）
             if drive_bias[4] > 0.7 and (self.drives.fatigue_drive < 0.2 or self.body.energy < 0.3):
                 pass  # 能量低时即使疲劳也不睡
             elif drive_bias[4] > 0.7 and self.body.energy > 0.5:

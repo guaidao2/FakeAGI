@@ -93,6 +93,17 @@ class GameNNDecision:
         self.last_action = action
         return action, strategy_idx
     
+    def get_action_probs(self, state: np.ndarray) -> np.ndarray:
+        """返回当前最优策略的动作概率分布（供决策委员会投票）"""
+        state_t = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        with torch.no_grad():
+            # 用策略权重加权各策略网络的 Q 值
+            q_total = torch.zeros(self.n_actions, device=self.device)
+            for i, net in enumerate(self.q_nets):
+                q_total += self.strategy_weights[i] * net(state_t).squeeze(0)
+            probs = torch.softmax(q_total, dim=-1)
+        return probs.cpu().numpy()
+    
     def learn(self, reward: float, next_state: np.ndarray = None, done: bool = False):
         """TD 误差学习"""
         if self.last_state is None or self.last_strategy is None:

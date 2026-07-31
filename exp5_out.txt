@@ -1,0 +1,13 @@
+D:\Program Files\Python311\Lib\site-packages\torch\cuda\__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+实验5: 反事实推理 — 岔路选择
+  [GROW_INPUT] 18→22 dims
+  [GROW_PERCEPTION] input->22dim
+  [GROW] 64→72 hidden (+8 增量)
+  [GROW#0] 64→72 hidden
+  [GROW] 72→80 hidden (+8 增量)
+  [GROW#0] 72→80 hidden
+  [GROW] 80→88 hidden (+8 增量)
+  [GROW#0] 80→88 hidden
+  左转(食物+伤害): 14次, 右转(安全): 6次
+  判定: WARN 边缘 — 宁愿受伤也要吃（生存优先）
