@@ -54,6 +54,11 @@ agi/
 │   │   ├── world_model.py   # 条件世界模型：hidden+action→next，感知/行动双通路
 │   │   └── superposition_world.py  # 薛定谔叠加态世界模型：多分支预测+观测坍缩+分裂生长
 │   │
+│   ├── perception/          # P6 感知器官（可生长的"眼睛"）
+│   │   ├── primitives.py    # 结构原语：Conv/Pool/Embed/Norm/Linear/Identity
+│   │   ├── organ.py         # Organ：原语链 + fitness(误差下降量) + replicate/mutate/prune
+│   │   └── generator.py     # OrganGenerator：超量生成+竞争选择+生存门控
+│   │
 │   ├── decision/            # 决策
 │   │   ├── gamenn.py        # GameNN多策略博弈（Q网络+策略权重+TD学习）
 │   │   └── committee.py     # 人脑式决策委员会：5决策者并行投票+加权仲裁
@@ -120,6 +125,17 @@ agi/
 - **融合**：surprise = 预测误差 + 坍缩熵×0.3，两种不确定性来源相加保留全部信息。
 
 验证：`test_superposition.py`（分支 3→5 分裂、熵 1.57→0.28 坍缩、t=52 发现隐藏规则）；A/B 对比（`test_ab_worldmodel.py`）显示叠加态学习速度比确定性世界模型快 39%（86.7→52.7 tick）。
+
+## P6 感知器官生长
+
+对应哲学底座之 ⑨ 生长/进化 的结构级实现（区别于广度扩维）：
+
+- **原语库**（`cognition/perception/primitives.py`）：ConvPatch（局部卷积）、PoolPatch（降采样）、EmbedPatch（符号嵌入）、NormPatch（归一化）、LinearPatch（线性）、IdentityPatch（直通）——器官的"基因"。
+- **Organ**（`organ.py`）：原语链 + fitness（预测误差下降量，A 度量防好奇漩涡）+ replicate（皮层柱复制堆叠）/ mutate（NEAT 参数变异）/ prune（突触修剪）。
+- **OrganGenerator**（`generator.py`）：超量生成 3 候选 → 竞争期候选输出**真实替换观测流**（世界模型预测误差 = 候选"眼睛"的感知质量）→ fitness 最优保留、其余凋亡（神经营养假说）→ 生存门控（`body.integrity` 低时不生成）。
+- **接入**：`len(obs) ≥ 16` 触发器官路径（低维直通零行为变化）；器官成熟后压缩观测（64D→8D）并重建观测抽象层；注册进生长协调器（`perception_organ`）。
+
+验证：`test_organ_gen.py`（64D 像素流：t=0 超量生成 3 候选 → t=80 竞争保留 conv → t=36 找到隐藏食物，6/6 通过）。
 
 ## 哲学底座（决定架构选择的十条原理）
 

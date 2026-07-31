@@ -1,7 +1,10 @@
 # EVOLUTION — 进化架构设计：MoE 专家路由 + 经验 DNA 跨代
 
-> 状态：设计定稿（2025-07-31，与 guidao2 讨论确定）
-> 本文档描述下一代 FakeAGI 的进化能力，尚未实现。
+> 状态：**部分实现**（2025-07-31）
+> - ✅ P1 MoE 专家路由：已实现（`cognition/decision/moe_router.py`，`test_moe.py` 通过）
+> - ✅ P6 器官生长：已实现（`cognition/perception/`，`test_organ_gen.py` 通过）
+> - ⏳ 经验 DNA 跨代（后代模式）：设计定稿，待实现
+> 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
 
@@ -191,12 +194,16 @@ session 结束（死亡/主动保存）
 - [x] **P1：多专家世界模型**（`cognition/temporal/world_experts.py`）— MoE 激活分情境预测
 - [x] **P2：经验 DNA**（`core/dna.py`）— 规律/技能/价值/生长轨迹提取，跨代加权合并，先验应用
 - [x] **P3：种群演化**（`test_evolution.py`）— 多代多个体，致命危险区选择压力，跨代改善验证（787→800）
+- [x] **P4：薛定谔叠加态世界模型**（`cognition/temporal/superposition_world.py`）— 多分支叠加/坍缩/分裂，A/B 学习快 39%
+- [x] **P6：感知器官生长**（`cognition/perception/`）— 高维输入自动长出感知器官（超量生成→竞争选择→结构生长），`test_organ_gen.py` 通过
 - [ ] P3b：多实例并行（当前串行，可并行化）
-- [ ] P4：语言接口 / 符号接地
+- [ ] P7：语言接口 / 符号接地
 
 验证：
 - `python test_persist.py` — checkpoint 往返 ✅
 - `python test_moe.py` — MoE 路由/创建/恢复 ✅
 - `python test_evolution.py` — 跨代演化 ✅
+- `python test_superposition.py` — 叠加态坍缩 ✅
+- `python test_organ_gen.py` — 器官生长 ✅
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
