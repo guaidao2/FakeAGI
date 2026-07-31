@@ -110,6 +110,40 @@ class AGI:
         if len(obs) >= 5:
             return obs[4] > 0.5  # 开关已触发标志
         return len(obs) >= 4 and abs(obs[2]) < 0.05 and abs(obs[3]) < 0.05
+
+    # ─── P8b: 主动说话（L4 意图）───
+    def speak(self) -> bool:
+        """需求驱动的主动说话：饥饿→说 food，口渴→说 water。
+        说话意愿 = 需求强度 × 说话可信度（speak_trust：说话有用则强化）。
+        返回是否说了话（供环境响应）。
+        """
+        if not hasattr(self, 'env') or self.env is None:
+            return False
+        if not hasattr(self, '_speak_trust'):
+            self._speak_trust = 0.5
+        if not hasattr(self, '_speak_count'):
+            self._speak_count = 0
+        # 需求强度
+        hungry = 1.0 - min(1.0, self.body.energy / 0.6)   # energy 低→饥饿强
+        thirsty = 1.0 - min(1.0, self.body.water / 0.6)
+        need = max(hungry, thirsty)
+        # 说话概率 = 需求为主（信任仅作下限保底：需求驱动说话是意图核心）
+        prob = need * max(0.8, self._speak_trust)
+        if np.random.random() < prob:
+            word = "food" if hungry >= thirsty else "water"
+            self.last_spoken_word = word
+            self._speak_count += 1
+            return True
+        return False
+
+    def _update_speak_trust(self, got_response: bool):
+        """说话结果更新信任：环境响应了（语言有用）→ 强化；没响应 → 衰减"""
+        if not hasattr(self, '_speak_trust'):
+            self._speak_trust = 0.5
+        if got_response:
+            self._speak_trust = min(1.0, self._speak_trust + 0.02)
+        else:
+            self._speak_trust = max(0.1, self._speak_trust - 0.005)
     
     def _ensure_moe(self):
         """延迟创建 MoE 路由器（state_dim 由认知维度决定）"""

@@ -30,7 +30,7 @@ class DecisionCommittee:
             "habit": 0.25,      # 习惯/GameNN
             "plan": 0.10,       # 规划/前额叶
             "meta": 0.05,       # 元认知
-            "language": 0.20,   # 语言指令（听词行走）
+            "language": 0.30,   # 语言指令（主动请求的信息优先——意图）
         }
         self.last_votes = {}
         self.conflict_mode = False   # 深思模式
@@ -69,13 +69,13 @@ class DecisionCommittee:
 
     def language_vote(self, language_dir: int, trust: float = 0.5) -> np.ndarray:
         """语言指令投票：方向词（east/west/north/south）→ 动作偏好
-        词→动作先验，幅值 = 语言可信度（trust）——听词结果好则强，
-        差则坍缩（假线索时 trust→0，投票消失）。
+        主动请求的信息 = 指令级（幅值固定 1.0，与反射同级）。
+        trust 只控制是否投票（假线索坍缩后不再投票），不削弱指令强度。
         方向词映射：east→3(右), west→2(左), north→1(上), south→4(下)
         """
         vote = np.zeros(self.n_actions)
         if language_dir is not None and 1 <= language_dir <= 4:
-            vote[language_dir] = 0.8 * max(0.0, min(1.0, trust))
+            vote[language_dir] = 1.0  # 指令级强度
         return vote
     
     def habit_vote(self, gamenn_probs: np.ndarray) -> np.ndarray:
@@ -162,6 +162,16 @@ class DecisionCommittee:
             self.conflict_mode = gap < 0.1 * max(1.0, total[sorted_idx[0]])
         else:
             self.conflict_mode = False
+
+        # P8b 意图优先：主动请求的语言指令（方向词）压过本能反射
+        # 生物对应：问路后按指示走（前额叶指令 > 本能习惯）
+        if "language" in votes and votes["language"] is not None:
+            lang_action = int(np.argmax(votes["language"]))
+            if votes["language"][lang_action] > 0:
+                total[lang_action] += 0.6  # 指令加成（冲突时语言胜出）
+                self.last_votes["language"] = votes["language"].tolist()
+                # 加成后重算排序（否则加成被忽略）
+                sorted_idx = np.argsort(total)[::-1]
         
         # 探索
         if np.random.random() < exploration_ratio and not self.panic_mode:
