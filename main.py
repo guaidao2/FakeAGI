@@ -27,6 +27,7 @@ from cognition.attention import AttentionGate
 from cognition.concept_bank import ConceptBank
 from cognition.decision.committee import DecisionCommittee
 from cognition.decision.moe import MoERouter
+from growth.coordinator import GrowthCoordinator
 from core.physics_intuition import PhysicsPrior
 from core.value_system import EvolvableValueSystem
 from core.persistence import save_checkpoint, load_checkpoint
@@ -71,6 +72,9 @@ class AGI:
         # P1: MoE 专家路由（延迟创建——state_dim 由认知维度决定）
         self.moe = None
         self.moe_state_dim = None
+        # P4: 统一生长协调器（全链路同步生长）
+        self.growth = GrowthCoordinator(max_hidden=256)
+        self._last_abstract_dim = None
         self.override_action = -1
         self._food_recently_tick = -1000
         self.causal_error = 0.0
@@ -116,6 +120,44 @@ class AGI:
         self.moe = MoERouter(state_dim=state_dim, n_actions=5,
                              max_experts=6, top_k=2,
                              device="cuda" if __import__('torch').cuda.is_available() else "cpu")
+    
+    def _coordinated_growth(self):
+        """
+        P4: 观测维度变化 → 全链路协调生长。
+        注册各模块生长接口（首次），观测抽象维度增长时同步全链路。
+        """
+        if self.cognition is None:
+            return
+        # 注册模块（幂等）
+        if "lnn" not in self.growth.modules:
+            self.growth.register(
+                "lnn",
+                grow_fn=lambda d: self.cognition.lnn.grow_input(d)
+                if d < 256 else None,
+                dim_fn=lambda: self.cognition.lnn.input_dim)
+            self.growth.register(
+                "world_model",
+                grow_fn=lambda d: None,  # WM 随 LNN hidden 生长，不随观测
+                dim_fn=lambda: self.cognition.world_model.input_dim)
+        # 检测观测抽象维度变化
+        abs_dim = self.cognition.obs_dim
+        if self._last_abstract_dim is not None and abs_dim > self._last_abstract_dim:
+            # 观测抽象层增长 → 记录协调事件（pipeline 内部已 grow_input，
+            # 协调器负责记账 + 同步其他模块）
+            target = abs_dim + self.cognition.self_state_dim
+            self.growth.growth_events += 1
+            self.growth.history.append(
+                (self.growth.growth_events, "obs_growth", ["obs_abstraction", "lnn"]))
+            if self.growth.log:
+                print(f"[GROWTH] 协调生长 #{self.growth.growth_events} "
+                      f"(obs_growth): obs {self._last_abstract_dim}→{abs_dim}D", flush=True)
+            self.growth.sync_to(target, source="obs_growth")
+            # 同步 MoE state_dim（若已创建）
+            if self.moe is not None and self.moe.state_dim < target:
+                old_sd = self.moe.state_dim
+                self.moe.state_dim = min(32, max(8, target))
+                print(f"[GROWTH] MoE state_dim {old_sd}→{self.moe.state_dim}", flush=True)
+        self._last_abstract_dim = abs_dim
     
     def _moe_state_vector(self) -> np.ndarray:
         """MoE 专家状态向量（隐状态压缩 + 驱动）"""
@@ -222,6 +264,11 @@ class AGI:
             
             # 误差通路：行动通路 → 提高探索率（在 process 之前生效）
             action, info = self.cognition.process(obs, self_state, exploration)
+            # P4: 观测变化 → 全链路协调生长
+            try:
+                self._coordinated_growth()
+            except Exception:
+                pass
             surprise = info.get("surprise", 0.0)
             error_path = info.get("error_path", "perception")
             

@@ -11,6 +11,7 @@ from cognition.temporal.lnn import LNN
 from cognition.temporal.world_model import WorldModel
 from cognition.temporal.world_experts import MultiExpertWorldModel
 from cognition.learning.surprise import SurpriseComputer
+from cognition.observation import ObservationAbstraction
 from cognition.decision.gamenn import GameNNDecision as GameNN
 from cognition.planner import Planner
 from cognition.imagination_channel import ImaginationChannel
@@ -26,6 +27,9 @@ class CognitionPipeline:
 
         self.obs_dim = input_dim
         self.self_state_dim = cfg.get("self_state_dim", 14)  # body(8) + drives(6)
+        # P4: 观测抽象层（原始观测 → 特征通道 → 抽象向量，维度可增长）
+        self.obs_abstraction = ObservationAbstraction(raw_dim=input_dim,
+                                                      max_channels=cfg.get("max_channels", 16))
         self.lnn = LNN(input_dim=input_dim + self.self_state_dim, hidden_dim=hidden_dim)
         self.world_model = WorldModel(input_dim=hidden_dim)
         # P1b: 多专家世界模型（分情境预测增强，可选启用）
@@ -70,20 +74,32 @@ class CognitionPipeline:
     
     def process(self, obs: np.ndarray, self_state: np.ndarray,
                 exploration_ratio: float = 0.0) -> tuple:
-        combined = np.concatenate([obs, self_state])
-        
+        # P4: 观测抽象层 — 原始观测 → 特征通道 → 抽象向量
+        # 若原始观测维度增大（新信号源），自动新增通道（主动生长，非被动补丁）
+        if len(obs) > self.obs_abstraction.raw_dim:
+            old_dim = self.obs_abstraction.raw_dim
+            # 新通道只覆盖新增的维度（old_dim..len(obs)-1）
+            self.obs_abstraction.add_channel(
+                f"signal_{old_dim}", list(range(old_dim, len(obs))),
+                transform="identity")
+        abstract_obs = self.obs_abstraction.observe(obs)
+        # 抽象维度 > 原 obs_dim → 触发感知生长（协调器会在 main 层同步全链路）
+        self.obs_dim = max(self.obs_dim, len(abstract_obs))
+
+        combined = np.concatenate([abstract_obs, self_state])
+
         # 感知维度自动生长（self_state_dim 动态更新，防止维度变化死循环）
         exp_dim = self.obs_dim + self.self_state_dim
         if len(combined) != exp_dim:
             if hasattr(self.lnn, 'grow_input'):
-                self.obs_dim = len(obs)
+                self.obs_dim = len(abstract_obs)
                 self.self_state_dim = len(self_state)
                 self.lnn.grow_input(len(combined))
                 print(f"  [GROW_PERCEPTION] input->{len(combined)}dim", flush=True)
             else:
                 combined = combined[:exp_dim] if len(combined) > exp_dim else np.pad(combined, (0, exp_dim - len(combined)))
         elif self.lnn.input_dim != len(combined):
-            self.obs_dim = len(obs)
+            self.obs_dim = len(abstract_obs)
             self.self_state_dim = len(self_state)
             self.lnn.grow_input(len(combined))
         

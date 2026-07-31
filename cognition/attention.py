@@ -28,6 +28,13 @@ class AttentionGate:
         """更新注意力权重，返回加权后的观测"""
         obs = np.asarray(obs, dtype=np.float32)
         
+        # 维度变化（观测增长）→ 清空历史，重新积累（不崩溃）
+        if self.obs_history and len(self.obs_history[0]) != len(obs):
+            self.obs_history = []
+            self.information_gain = np.zeros(len(obs), dtype=np.float32)
+            self.salience = np.zeros(len(obs), dtype=np.float32)
+            self.weights = np.ones(len(obs), dtype=np.float32)
+        
         # 初始化阶段：返回原始观测（identity），避免破坏反射阈值
         if len(self.obs_history) < 20:
             self.obs_history.append(obs.copy())

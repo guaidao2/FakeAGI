@@ -44,6 +44,7 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
                 "lnn": agi.cognition.lnn.state_dict(),
                 "world_model": agi.cognition.world_model.state_dict(),
                 "expert_world": agi.cognition.expert_world.get_state_dict(),
+                "obs_abstraction": agi.cognition.obs_abstraction.get_state_dict(),
                 # GameNN 是普通类（非 nn.Module），手动序列化
                 "gamenn": {
                     "q_nets": [q.state_dict() for q in g.q_nets],
@@ -194,6 +195,12 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
                         print(f"[PERSIST] expert_world 加载告警: {e}")
                 except Exception as e:
                     print(f"[PERSIST] expert_world 恢复失败: {e}")
+            # 观测抽象层恢复
+            if "obs_abstraction" in c:
+                try:
+                    agi.cognition.obs_abstraction.load_state_dict(c["obs_abstraction"])
+                except Exception as e:
+                    print(f"[PERSIST] obs_abstraction 恢复失败: {e}")
             # GameNN 手动恢复
             g = agi.cognition.gamenn
             gm = c["gamenn"]
