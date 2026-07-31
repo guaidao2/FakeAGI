@@ -31,7 +31,7 @@ def test():
             wx, wy = self.water_pos
             return np.array([(wx-self.pos[0])/10, (wy-self.pos[1])/10, 0.0, 0.0])
         def step(self, a):
-            if a == 4: return {'energy_delta': -0.0002, 'water_delta': -0.0001}
+            # 动作: 0=stay 1=up 2=left 3=right 4=down（与主循环一致，无特判）
             dirs=[(0,0),(0,-1),(-1,0),(1,0),(0,1)]; dx,dy=dirs[a%5]
             self.pos[0]=max(0,min(9,self.pos[0]+dx)); self.pos[1]=max(0,min(9,self.pos[1]+dy))
             at_water = abs(self.pos[0]-self.water_pos[0])+abs(self.pos[1]-self.water_pos[1])<2
