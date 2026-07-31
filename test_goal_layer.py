@@ -8,10 +8,11 @@
   G1 基线：无目标层（默认探索）——预期饿死
   G2 目标层：落差驱动探索调制——测试修复
   G5 恒定0.8探索+无目标层：分离"目标表征" vs "高探索率"（关键对照）
+  G6 目标层+定向扫掠：落差驱动 InfoSeeker 系统性搜索（epistemic value）
   G3 RL+解锁奖励：参考
   G4 去反射+目标层：排除反射锚定混淆
 
-判定（n=3）：G2 ≥ 2/3 成功 且 弱优于 G5（目标层提供探索率之外的增量）
+判定（n=3）：G6 ≥ 2/3 成功 且 显著优于 G5（定向搜索提供探索率之外的增量）
 说明：n=3 单环境，结论为弱支持/配置有效性，公理④ 精炼需进一步消融。
 """
 import sys, os
@@ -67,7 +68,8 @@ class CausalEnv:
 # ═══ G1/G2/G4：FakeAGI 系列 ═══
 
 def run_fakeagi(use_goal_layer=False, disable_reflex=False,
-                const_explore=None, max_ticks=3000, seed=0):
+                const_explore=None, use_info_seek=False,
+                max_ticks=3000, seed=0):
     np.random.seed(seed)
     torch.manual_seed(seed)
     cfg = {"input_dim": 4, "self_state_dim": 14, "hidden_dim": 64,
@@ -76,7 +78,7 @@ def run_fakeagi(use_goal_layer=False, disable_reflex=False,
     agi.set_cognition(CognitionPipeline(cfg))
     env = CausalEnv()
     agi.set_env(env)
-    if use_goal_layer:
+    if use_goal_layer or use_info_seek:
         # 注入目标层并启用调制
         agi.goal_state = GoalState()
         agi.goal_state.register(Goal(
@@ -86,6 +88,9 @@ def run_fakeagi(use_goal_layer=False, disable_reflex=False,
             "water_maintenance", target_value=0.7,
             current_fn=lambda: agi.body.water, weight=1.5))
         agi._goal_enabled = True
+        if use_info_seek:
+            # 定向搜索模式（落差→InfoSeeker 扫掠，覆盖委员会动作）
+            agi.info_seeker.grid_size = env.size
     else:
         # 禁用目标层（基线隔离）
         agi.goal_state = GoalState()
@@ -204,8 +209,9 @@ def test():
     print("实验13: 目标层消融 — 目标表征是否修复 S2", flush=True)
     print("=" * 60, flush=True)
     g1 = run_group("G1 基线（无目标层）", lambda seed=0: run_fakeagi(False, seed=seed))
-    g2 = run_group("G2 目标层（落差驱动）", lambda seed=0: run_fakeagi(True, seed=seed))
+    g2 = run_group("G2 目标层（探索调制）", lambda seed=0: run_fakeagi(True, seed=seed))
     g5 = run_group("G5 恒定0.8探索+无目标层", lambda seed=0: run_fakeagi(False, const_explore=0.8, seed=seed))
+    g6 = run_group("G6 目标层+定向扫掠", lambda seed=0: run_fakeagi(True, use_info_seek=True, seed=seed))
     g3 = run_group("G3 RL+解锁中间奖励", lambda seed=0: run_rl(True, seed=seed))
     g4 = run_group("G4 去反射+目标层", lambda seed=0: run_fakeagi(True, True, seed=seed))
 
@@ -216,17 +222,19 @@ def test():
           f"食物 {g2['food']:.1f}", flush=True)
     print(f"  G5 恒定探索: 存活 {np.mean([r['survived'] for r in g5['results']]):.0f} "
           f"食物 {g5['food']:.1f}", flush=True)
+    print(f"  G6 定向扫掠: 存活 {np.mean([r['survived'] for r in g6['results']]):.0f} "
+          f"食物 {g6['food']:.1f}", flush=True)
     print(f"  G3 RL+奖励: 食物 {g3['food']:.1f}", flush=True)
     print(f"  G4 去反射+目标: 存活 {np.mean([r['survived'] for r in g4['results']]):.0f} "
           f"食物 {g4['food']:.1f}", flush=True)
 
-    # 判定（≥2/3 成功 + 弱优于恒定探索——n=3 弱支持）
-    g2_fixed = g2["succ"] >= 2 and g2["food"] > g5["food"] * 1.2
-    verdict = ("弱优于恒定探索（弱支持[目标表征有效]，n=3 需扩大）" if g2_fixed
-               else "未优于恒定探索（高探索率即可解释，目标层无增量证据）")
-    print(f"\n  判定(n=3): G2 目标层 vs G5 恒定探索: {verdict}", flush=True)
+    # 判定：G6 定向扫掠是否显著优于 G5 恒定探索（目标表征+定向搜索的增量）
+    g6_better = g6["succ"] >= 2 and g6["food"] > g5["food"] * 1.5
+    verdict = ("显著优于恒定探索（定向搜索提供增量——落差驱动信息寻求成立）" if g6_better
+               else "未显著优于恒定探索（定向搜索无增量证据）")
+    print(f"\n  判定(n=3): G6 定向扫掠 vs G5 恒定探索: {verdict}", flush=True)
     print(f"  说明: 配置有效性证据（弱），公理④ 精炼需进一步消融", flush=True)
-    return 0 if g2_fixed else 1
+    return 0 if g6_better else 1
 
 
 if __name__ == "__main__":

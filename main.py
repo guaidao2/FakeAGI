@@ -53,6 +53,10 @@ class AGI:
         self._goal_info = {}
         self._goal_enabled = False   # 默认关闭探索调制（旧实验零影响）
         self._goal_off = False
+        # 信息寻求器（落差→定向扫掠，非随机探索）
+        from core.info_seeking import InfoSeeker
+        self.info_seeker = InfoSeeker(grid_size=16)
+        self._info_seek_action = None  # 定向扫掠给出的动作（覆盖用）
         self.self_model = SelfModel()
         self.homeostasis = Homeostasis()
         
@@ -353,14 +357,23 @@ class AGI:
                 exploration = 0.1
             else:
                 exploration = 0.2
-            # 目标层：落差高 + 无线索 → 信息寻求 → 探索率提升
-            # （仅 _goal_enabled 时生效——默认关闭，旧实验零影响）
+            # 目标层：落差高 + 无线索 → 定向扫掠（信息寻求，非随机）
+            # 仅 _goal_enabled 时生效（默认关闭，旧实验零影响）
+            self._info_seek_action = None
+            if (self._goal_enabled and not getattr(self, '_goal_off', False)):
+                if exploration_intent > 0.2:
+                    # 启动/继续定向扫掠
+                    if not self.info_seeker.active:
+                        self.info_seeker.start_search(self.pos, "resource")
+                    seek_a = self.info_seeker.choose_action(self.pos)
+                    self._info_seek_action = seek_a
+                elif self.info_seeker.active:
+                    # 落差消解（找到资源）→ 停止搜索
+                    self.info_seeker.stop_search()
+            # 恒定探索对照（G5）：固定探索率 + 禁用信息寻求
             if getattr(self, '_const_explore', None) is not None:
-                exploration = self._const_explore  # 对照：恒定探索率
-            elif (exploration_intent > 0.2
-                    and self._goal_enabled
-                    and not getattr(self, '_goal_off', False)):
-                exploration = max(exploration, 0.8)
+                exploration = self._const_explore
+                self._info_seek_action = None
             
             # 误差通路：行动通路 → 提高探索率（在 process 之前生效）
             action, info = self.cognition.process(
@@ -504,6 +517,9 @@ class AGI:
                     exploration_ratio=exploration)
                 action = decision["action"]
                 self.committee_state = decision
+                # 信息寻求覆盖：定向扫掠动作优先（目标层落差驱动）
+                if self._info_seek_action is not None:
+                    action = self._info_seek_action
                 # MoE 专家决策覆盖（仅在专家池成熟且置信时）
                 if (moe_action is not None and self.moe is not None
                         and len(self.moe.experts) >= 1
