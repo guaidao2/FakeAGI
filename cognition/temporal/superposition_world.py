@@ -124,7 +124,8 @@ class SuperpositionWorldModel(nn.Module):
                                    for e in errors])
             new_amps = torch.softmax(logits, dim=0)
             for i, b in enumerate(self.branches):
-                b.amplitude = new_amps[i].clone()
+                # copy_ 保持 buffer 设备一致（直接赋值会把 buffer 换成 CPU tensor）
+                b.amplitude.copy_(new_amps[i])
                 if errors[i] < 0.02:
                     b.hit_count += 1.0
                 else:
@@ -178,18 +179,25 @@ class SuperpositionWorldModel(nn.Module):
         child.amplitude = torch.tensor(parent.amplitude.item() * 0.6,
                                        device=dev if dev is not None else None)
         self.branches.append(child)
+        # 重建优化器：新分支参数必须进入 param_groups（否则永不更新）
+        self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
         return True
 
-    def should_split(self, threshold: float = 2.0) -> bool:
-        """何时分裂：最近多次坍缩熵高 + 所有分支持续 miss → 容量不足"""
+    def should_split(self, threshold_ratio: float = 0.85) -> bool:
+        """何时分裂：最近多次坍缩熵接近理论上限（均匀分布）→ 所有分支都无法
+        区分观测（全局坍缩失败）→ 容量不足。阈值用熵/ln(n) 归一化，
+        不受分支数影响（均匀分布熵=ln(n)，比值=1.0）。"""
         if len(self.branches) >= self.max_branches:
             return False
         recent = self.collapse_history[-20:]
         if len(recent) < 10:
             return False
+        n = len(self.branches)
+        max_entropy = np.log(n) if n > 1 else 1.0
         avg_entropy = np.mean([e for _, _, e in recent])
+        ratio = avg_entropy / max_entropy
         worst_branch = min(b.miss_count.item() for b in self.branches)
-        return avg_entropy > threshold and worst_branch > 5
+        return ratio > threshold_ratio and worst_branch > 5
 
     # ─── 兼容旧接口 ───
     def imagine(self, h: torch.Tensor, action_seq: list) -> list:

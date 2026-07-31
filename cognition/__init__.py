@@ -135,10 +135,11 @@ class CognitionPipeline:
                     quantum_surprise = self.world_model.collapse_with_predictions(
                         preds, self.hidden.detach(), tick=self._process_tick)
                     pred = sum(a * p for a, p in zip(amps, preds))
-                    surprise = max(self.surprise_computer.compute(
+                    # 融合：预测误差 + 坍缩熵（两者是不同来源的不确定性，相加保留全部信息）
+                    pred_error = self.surprise_computer.compute(
                         pred.cpu().numpy().flatten(),
-                        self.hidden.detach().cpu().numpy().flatten()),
-                        quantum_surprise * 0.3)  # 融合：预测误差 + 坍缩不确定性
+                        self.hidden.detach().cpu().numpy().flatten())
+                    surprise = min(1.0, pred_error + quantum_surprise * 0.3)
                     # 分支分裂（生长）：全局坍缩失败 → 世界模型容量不足
                     if self.world_model.should_split():
                         if self.world_model.split():

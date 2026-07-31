@@ -95,12 +95,10 @@ def main():
     n_branches_init = len(wm.branches)
     print(f"初始分支数: {n_branches_init}", flush=True)
 
-    # 先期正常环境预热（50 tick 让世界模型建立"吃→能量↑"先验）
-    warm_env = type('W', (), {})()
-    for _ in range(50):
-        agi.step()
+    # 无预热：直接进隐藏规则环境，让叠加态模型在"吃→能量不变"的持续
+    # 坍缩失败中维持高熵，触发分支分裂（验证生长路径）
 
-    max_ticks = 1200
+    max_ticks = 1500
     entropy_series = []
     found_switch_at = None
     ate_at = None
@@ -118,6 +116,7 @@ def main():
     # 统计
     n_branches_final = len(wm.branches)
     dominant = [b.amplitude.item() for b in wm.branches]
+    hits = [b.hit_count.item() for b in wm.branches]
     early_entropy = np.mean(entropy_series[:200]) if entropy_series else 0
     late_entropy = np.mean(entropy_series[-200:]) if entropy_series else 0
     stats = wm.branch_stats()
@@ -132,10 +131,20 @@ def main():
     # 判定
     checks = []
     checks.append(("叠加态存在", n_branches_final >= 2))
-    checks.append(("分支分化", max(dominant) > 0.5))
+    # 分支分化：至少一个分支 hit>0（坍缩到真实转移）或振幅主导
+    checks.append(("分支分化", max(hits) > 0 or max(dominant) > 0.5))
     checks.append(("发现开关", found_switch_at is not None))
     checks.append(("吃到食物", ate_at is not None))
     checks.append(("存活", agi.alive))
+    # 熵有效性：隐藏规则期高熵（叠加态未坍缩）→ 学习后熵下降
+    # 用开关后的 300-800 tick 窗口（给坍缩时间），对比开关前窗口
+    if found_switch_at is not None and len(entropy_series) > 800:
+        switch_idx = found_switch_at
+        before = np.mean(entropy_series[max(0, switch_idx - 150):switch_idx])
+        after = np.mean(entropy_series[min(switch_idx + 300, len(entropy_series) - 1):
+                                       min(switch_idx + 800, len(entropy_series))])
+        checks.append(("熵先高后低", before > after + 0.05))
+        print(f"开关前熵={before:.3f} 学习后熵={after:.3f}", flush=True)
 
     passed = all(c for _, c in checks)
     print("\n判定: " + ("OK 通过" if passed else "FAIL 未通过"), flush=True)

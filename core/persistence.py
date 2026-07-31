@@ -167,7 +167,14 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
                 agi.cognition.lnn.grow_input(saved_input)
                 agi.cognition.obs_dim = agi.cognition.lnn.input_dim - agi.cognition.self_state_dim
             agi.cognition.lnn.load_state_dict(c["lnn"])
-            agi.cognition.world_model.load_state_dict(c["world_model"])
+            # 世界模型：叠加态（branches.*）与旧版（predictor/action_embed）兼容
+            wm_sd = c["world_model"]
+            wm = agi.cognition.world_model
+            if hasattr(wm, "branches") and any(k.startswith("branches.") for k in wm_sd):
+                # 旧档无 branches.* → 保持默认初始化，仅加载匹配部分
+                wm.load_state_dict(wm_sd, strict=False)
+            else:
+                wm.load_state_dict(wm_sd)
             if "expert_world" in c:
                 try:
                     # 先 grow 到保存时的 hidden 维度（形状匹配）
