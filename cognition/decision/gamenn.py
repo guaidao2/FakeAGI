@@ -127,7 +127,8 @@ class GameNNDecision:
         
         # TD 误差
         q_sa = q_net(s).gather(1, a.unsqueeze(1)).squeeze()
-        loss = F.mse_loss(q_sa, torch.tensor([target], device=self.device))
+        target_t = torch.tensor(target, dtype=q_sa.dtype, device=self.device)
+        loss = F.mse_loss(q_sa, target_t)
         
         opt.zero_grad()
         loss.backward()
