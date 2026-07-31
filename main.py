@@ -81,7 +81,6 @@ class AGI:
         # P8a: 语言可信度（可学习先验——听词结果好则强化，差则坍缩）
         self._language_trust = 0.5  # 初始半信半疑（可被经验修正）
         self._language_used_tick = 0
-        self._language_found_food = False
         
         # ─── 运行状态 ───
         self.tick = 0
@@ -349,13 +348,16 @@ class AGI:
                 lang_v = None
                 if (hasattr(self.cognition, 'language')
                         and self.cognition.language is not None
-                        and self.cognition.language_tokens
-                        and self._language_trust > 0.15):
+                        and self.cognition.language_tokens):
                     DIR_MAP = {"east": 3, "west": 2, "north": 1, "south": 4}
+                    trust_eff = self._language_trust
+                    # 信任归零后周期性试探（好奇心：语言可能有用，偶尔听一下）
+                    if trust_eff <= 0.15 and np.random.random() < 0.02:
+                        trust_eff = 0.2
                     for w in self.cognition.language_tokens:
-                        if w in DIR_MAP:
+                        if w in DIR_MAP and trust_eff > 0.15:
                             lang_v = self.committee.language_vote(
-                                DIR_MAP[w], self._language_trust)
+                                DIR_MAP[w], trust_eff)
                             self._language_used_tick = self.tick
                             break
                 # 1. 反射投票（本能：朝主要目标）
@@ -514,11 +516,12 @@ class AGI:
                         self._food_recently_tick = self.tick
                         # P8a: 听词后找到食物 → 语言可信度强化（学习信号）
                         if self._language_used_tick == self.tick:
-                            self._language_trust = min(1.0, self._language_trust + 0.05)
-                # P8a: 用了语言但没找到食物 → 可信度轻微衰减（假线索坍缩）
+                            self._language_trust = min(1.0, self._language_trust + 0.1)
+                # P8a: 用了语言但没找到食物 → 可信度缓慢衰减（假线索坍缩）
+                # 衰减慢于恢复（信任易碎但可重建），-0.002→-0.0005
                 if (self._language_used_tick == self.tick
-                        and abs(env_energy) <= 0.001):
-                    self._language_trust = max(0.0, self._language_trust - 0.002)
+                        and env_energy < 0.01):
+                    self._language_trust = max(0.0, self._language_trust - 0.0005)
                 if abs(env_water) > 0.001:
                     self.body.water = np.clip(self.body.water + env_water, 0, 1)
         
