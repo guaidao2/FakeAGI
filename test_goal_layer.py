@@ -69,7 +69,7 @@ class CausalEnv:
 
 def run_fakeagi(use_goal_layer=False, disable_reflex=False,
                 const_explore=None, use_info_seek=False,
-                max_ticks=3000, seed=0):
+                info_seek_always=False, max_ticks=3000, seed=0):
     np.random.seed(seed)
     torch.manual_seed(seed)
     cfg = {"input_dim": 4, "self_state_dim": 14, "hidden_dim": 64,
@@ -78,8 +78,8 @@ def run_fakeagi(use_goal_layer=False, disable_reflex=False,
     agi.set_cognition(CognitionPipeline(cfg))
     env = CausalEnv()
     agi.set_env(env)
-    if use_goal_layer or use_info_seek:
-        # 注入目标层并启用调制
+    if use_goal_layer or use_info_seek or info_seek_always:
+        # 注入目标层（扫掠需要落差门控；恒开模式则始终扫掠）
         agi.goal_state = GoalState()
         agi.goal_state.register(Goal(
             "energy_maintenance", target_value=0.8,
@@ -88,9 +88,12 @@ def run_fakeagi(use_goal_layer=False, disable_reflex=False,
             "water_maintenance", target_value=0.7,
             current_fn=lambda: agi.body.water, weight=1.5))
         agi._goal_enabled = True
-        if use_info_seek:
-            # 定向搜索模式（落差→InfoSeeker 扫掠，覆盖委员会动作）
+        if use_info_seek or info_seek_always:
+            # 定向搜索模式（落差→InfoSeeker 扫掠）
             agi.info_seeker.grid_size = env.size
+            agi._info_seek_enabled = True
+            if info_seek_always:
+                agi._info_seek_always = True  # 恒开（无落差门控）
     else:
         # 禁用目标层（基线隔离）
         agi.goal_state = GoalState()
@@ -212,6 +215,7 @@ def test():
     g2 = run_group("G2 目标层（探索调制）", lambda seed=0: run_fakeagi(True, seed=seed))
     g5 = run_group("G5 恒定0.8探索+无目标层", lambda seed=0: run_fakeagi(False, const_explore=0.8, seed=seed))
     g6 = run_group("G6 目标层+定向扫掠", lambda seed=0: run_fakeagi(True, use_info_seek=True, seed=seed))
+    g6b = run_group("G6b 扫掠恒开+无目标层", lambda seed=0: run_fakeagi(False, info_seek_always=True, seed=seed))
     g3 = run_group("G3 RL+解锁中间奖励", lambda seed=0: run_rl(True, seed=seed))
     g4 = run_group("G4 去反射+目标层", lambda seed=0: run_fakeagi(True, True, seed=seed))
 
@@ -224,17 +228,20 @@ def test():
           f"食物 {g5['food']:.1f}", flush=True)
     print(f"  G6 定向扫掠: 存活 {np.mean([r['survived'] for r in g6['results']]):.0f} "
           f"食物 {g6['food']:.1f}", flush=True)
+    print(f"  G6b 扫掠恒开: 存活 {np.mean([r['survived'] for r in g6b['results']]):.0f} "
+          f"食物 {g6b['food']:.1f}", flush=True)
     print(f"  G3 RL+奖励: 食物 {g3['food']:.1f}", flush=True)
     print(f"  G4 去反射+目标: 存活 {np.mean([r['survived'] for r in g4['results']]):.0f} "
           f"食物 {g4['food']:.1f}", flush=True)
 
-    # 判定：G6 定向扫掠是否显著优于 G5 恒定探索（目标表征+定向搜索的增量）
-    g6_better = g6["succ"] >= 2 and g6["food"] > g5["food"] * 1.5
-    verdict = ("显著优于恒定探索（定向搜索提供增量——落差驱动信息寻求成立）" if g6_better
-               else "未显著优于恒定探索（定向搜索无增量证据）")
-    print(f"\n  判定(n=3): G6 定向扫掠 vs G5 恒定探索: {verdict}", flush=True)
+    # 判定：① 扫掠机制 vs 随机探索（G6 vs G5）；② 落差门控增量（G6 vs G6b）
+    sweep_better = g6["succ"] >= 2 and g6["food"] > g5["food"] * 1.5
+    gap_better = g6["food"] > g6b["food"] * 1.2
+    v1 = "扫掠优于随机探索" if sweep_better else "扫掠未优于随机"
+    v2 = "落差门控有增量" if gap_better else "落差门控无增量（恒开即可）"
+    print(f"\n  判定(n=3): ① {v1}; ② {v2}", flush=True)
     print(f"  说明: 配置有效性证据（弱），公理④ 精炼需进一步消融", flush=True)
-    return 0 if g6_better else 1
+    return 0 if (sweep_better and gap_better) else 1
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ class AGI:
         from core.info_seeking import InfoSeeker
         self.info_seeker = InfoSeeker(grid_size=16)
         self._info_seek_action = None  # 定向扫掠给出的动作（覆盖用）
+        self._info_seek_enabled = False  # 扫掠门控（仅显式启用，G6）
         self.self_model = SelfModel()
         self.homeostasis = Homeostasis()
         
@@ -358,11 +359,15 @@ class AGI:
             else:
                 exploration = 0.2
             # 目标层：落差高 + 无线索 → 定向扫掠（信息寻求，非随机）
-            # 仅 _goal_enabled 时生效（默认关闭，旧实验零影响）
+            # 仅 _info_seek_enabled 时生效（显式启用，避免 G2/G5 混变量）
             self._info_seek_action = None
-            if (self._goal_enabled and not getattr(self, '_goal_off', False)):
-                if exploration_intent > 0.2:
-                    # 启动/继续定向扫掠
+            if (self._info_seek_enabled
+                    and self._goal_enabled
+                    and not getattr(self, '_goal_off', False)):
+                seek_trigger = (getattr(self, '_info_seek_always', False)
+                                or exploration_intent > 0.2)
+                if seek_trigger:
+                    # 启动/继续定向扫掠（恒开模式：不看落差）
                     if not self.info_seeker.active:
                         self.info_seeker.start_search(self.pos, "resource")
                     seek_a = self.info_seeker.choose_action(self.pos)
@@ -518,7 +523,10 @@ class AGI:
                 action = decision["action"]
                 self.committee_state = decision
                 # 信息寻求覆盖：定向扫掠动作优先（目标层落差驱动）
-                if self._info_seek_action is not None:
+                # 恐慌模式例外：危机时不扫掠（保命优先）
+                if (self._info_seek_action is not None
+                        and not (self.committee.panic_mode
+                                 if self.committee is not None else False)):
                     action = self._info_seek_action
                 # MoE 专家决策覆盖（仅在专家池成熟且置信时）
                 if (moe_action is not None and self.moe is not None
