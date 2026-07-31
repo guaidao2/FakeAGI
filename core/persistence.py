@@ -64,6 +64,7 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
             print(f"[PERSIST] cognition 保存失败: {e}")
 
     # 1b. MoE 专家路由（P1）
+    # 1b. MoE 专家路由（P1）— 确保已创建（延迟创建可能还没触发）
     if getattr(agi, 'moe', None) is not None:
         try:
             data["moe"] = agi.moe.get_state_dict()
@@ -169,9 +170,16 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             agi.cognition.world_model.load_state_dict(c["world_model"])
             if "expert_world" in c:
                 try:
-                    agi.cognition.expert_world.load_state_dict(c["expert_world"])
-                except Exception:
-                    pass
+                    # 确保 heads 数量匹配（按 checkpoint 中的 head 数补齐/截断）
+                    ew_sd = c["expert_world"]
+                    n_saved = len([k for k in ew_sd if k.startswith("heads.")])
+                    from cognition.temporal.world_experts import ExpertWorldHead
+                    while len(agi.cognition.expert_world.heads) < n_saved:
+                        agi.cognition.expert_world.heads.append(
+                            ExpertWorldHead(agi.cognition.expert_world.input_dim))
+                    agi.cognition.expert_world.load_state_dict(ew_sd)
+                except Exception as e:
+                    print(f"[PERSIST] expert_world 恢复失败: {e}")
             # GameNN 手动恢复
             g = agi.cognition.gamenn
             gm = c["gamenn"]
@@ -192,11 +200,14 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
         except Exception as e:
             print(f"[PERSIST] cognition 恢复失败: {e}")
 
-    # 1b. MoE 专家路由恢复
-    if "moe" in data and getattr(agi, 'moe', None) is not None:
+    # 1b. MoE 专家路由恢复（先确保已创建，再加载）
+    if "moe" in data:
         try:
-            agi.moe.load_state_dict(data["moe"])
-            print(f"[PERSIST] MoE 专家池已恢复 ({len(agi.moe.experts)} 专家)")
+            if agi.moe is None:
+                agi._ensure_moe()
+            if agi.moe is not None:
+                agi.moe.load_state_dict(data["moe"])
+                print(f"[PERSIST] MoE 专家池已恢复 ({len(agi.moe.experts)} 专家)")
         except Exception as e:
             print(f"[PERSIST] moe 恢复失败: {e}")
 
