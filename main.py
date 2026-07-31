@@ -231,13 +231,14 @@ class AGI:
                     secondary_reached=self._secondary_reached(obs))
                 # 2. 边缘系统投票（驱动力偏置）
                 limbic_v = self.committee.limbic_vote(drive_bias)
-                # 3. 习惯投票（GameNN 概率，用 LNN hidden 作为状态）
+                # 3. 习惯投票（GameNN 概率，用 LNN 输出状态与训练一致）
                 habit_v = None
-                if hasattr(self.cognition, 'gamenn') and self.cognition.hidden is not None:
+                if (hasattr(self.cognition, 'gamenn')
+                        and getattr(self.cognition, 'last_lnn_out', None) is not None):
                     g = self.cognition.gamenn
                     if hasattr(g, 'get_action_probs'):
                         sd = g.state_dim
-                        s = self.cognition.hidden.detach().cpu().numpy().flatten()
+                        s = self.cognition.last_lnn_out.detach().cpu().numpy().flatten()
                         if len(s) < sd:
                             s = np.pad(s, (0, sd - len(s)))
                         else:
@@ -274,11 +275,22 @@ class AGI:
                 action = decision["action"]
                 self.committee_state = decision
             
-            # 睡眠动作（睡眠优先于一切，由驱动力偏置决定）
-            if drive_bias[4] > 0.7 and (self.drives.fatigue_drive < 0.2 or self.body.energy < 0.3):
-                pass  # 能量低时即使疲劳也不睡
-            elif drive_bias[4] > 0.7 and self.body.energy > 0.5:
-                action = 4
+            # GameNN 学习：基于能量变化的奖励信号（用 LNN hidden 作状态）
+            if (hasattr(self.cognition, 'gamenn') and self.cognition.hidden is not None):
+                g = self.cognition.gamenn
+                sd = g.state_dim
+                s = self.cognition.hidden.detach().cpu().numpy().flatten()
+                if len(s) < sd:
+                    s = np.pad(s, (0, sd - len(s)))
+                else:
+                    s = s[:sd]
+                reward = energy_delta * 10 + damage * (-5)
+                g.learn(reward, next_state=s)
+            
+            # 睡眠由驱动力触发状态（不是动作 4；睡眠是状态，动作编号 4 = down）
+            if drive_bias[4] > 0.7 and self.body.energy > 0.5 and not self.body.is_sleeping:
+                self.body.is_sleeping = True
+                self.sleep_cycle.is_sleeping = True
         # 睡眠动作（睡眠是状态，不是动作）
         if self.body.is_sleeping:
             action = 0  # 睡眠时动作无关，自模型会处理恢复

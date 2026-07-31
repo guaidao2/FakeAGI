@@ -30,6 +30,7 @@ class CognitionPipeline:
         self.surprise_computer = SurpriseComputer()
         self.gamenn = GameNN(n_strategies=n_strategies, n_actions=n_actions, state_dim=hidden_dim)
         self.hidden = None
+        self.last_lnn_out = None
         self.last_action_taken = 0  # 上一步执行的动作
 
         self.config = cfg
@@ -141,6 +142,7 @@ class CognitionPipeline:
 
         # GameNN 状态相关决策（如果 LNN 维度变动，截断/填充到 GameNN 固定维度）
         self.gamenn.epsilon = exploration_ratio
+        self.last_lnn_out = lnn_out  # 供主循环习惯投票使用（与训练状态一致）
         feat = lnn_out.detach().cpu().numpy().flatten()
         if len(feat) != self.gamenn.state_dim:
             if len(feat) > self.gamenn.state_dim:

@@ -3,6 +3,8 @@ D:\Program Files\Python311\Lib\site-packages\torch\cuda\__init__.py:61: FutureWa
 实验4: 因果推理 — 隐藏规则
   [GROW_INPUT] 18→24 dims
   [GROW_PERCEPTION] input->24dim
+D:\编程\game\agi\cognition\decision\gamenn.py:130: UserWarning: Using a target size (torch.Size([1])) that is different to the input size (torch.Size([])). This will likely lead to incorrect results due to broadcasting. Please ensure they have the same size.
+  loss = F.mse_loss(q_sa, torch.tensor([target], device=self.device))
   T40: pos=[4, 1] e=0.943 sleepy=False
   T41: pos=[3, 1] e=0.942 sleepy=False
   T42: pos=[3, 2] e=0.941 sleepy=False

@@ -56,8 +56,14 @@ class LTCell(nn.Module):
             h_in = min(old_h, new_in)
             self.W_x.weight[:old_h, :h_in] = old_Wx_weight[:, :h_in]
             self.W_h.weight[:old_h, :old_h] = old_Wh_weight
-            # tau_net 权重迁移：保留旧输入→旧输出部分
-            self.tau_net[0].weight[:old_h, :old_h * 2] = old_tau_w[:old_h, :old_h * 2]
+            # tau_net 权重迁移：tau_net 输入是 cat([x, h])
+            #   旧布局: x 占列 [0, old_h), h 占列 [old_h, 2*old_h)
+            #   新布局: x 占列 [0, new_h), h 占列 [new_h, 2*new_h)
+            # 分段迁移避免列错位（x 部分保持原位，h 部分移到新位置）
+            old_tau_x = old_tau_w[:old_h, :old_h]      # 旧 x 输入权重
+            old_tau_h = old_tau_w[:old_h, old_h:]      # 旧 h 输入权重
+            self.tau_net[0].weight[:old_h, :old_h] = old_tau_x
+            self.tau_net[0].weight[:old_h, new_hidden:new_hidden + old_h] = old_tau_h
             self.tau_net[0].bias[:old_h] = old_tau_b[:old_h]
         
         self.hidden_dim = new_hidden

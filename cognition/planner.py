@@ -47,9 +47,8 @@ class Planner:
         for depth in range(self.horizon):
             new_nodes = []
             for node_idx, node in enumerate(tree):
-                if node["actions"] and len(node["actions"]) >= depth:
-                    continue
-                if node["actions"] and len(node["actions"]) > depth:
+                # 只展开 BFS 当前前沿：actions 长度必须等于 depth
+                if len(node["actions"]) != depth:
                     continue
                 
                 # 从当前 hidden 预测所有动作的 Q 值
