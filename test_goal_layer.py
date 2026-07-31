@@ -6,13 +6,15 @@
 
 组别：
   G1 基线：无目标层（默认探索）——预期饿死
-  G2 目标层：落差驱动探索调制——测试修复
-  G5 恒定0.8探索+无目标层：分离"目标表征" vs "高探索率"（关键对照）
-  G6 目标层+定向扫掠：落差驱动 InfoSeeker 系统性搜索（epistemic value）
+  G2 目标层：落差驱动（当前实现无独立调制，与 G1 近似——对照基线）
+  G5 恒定0.8探索+无目标层：分离"扫掠机制" vs "高探索率"（关键对照）
+  G6 目标层+定向扫掠：落差门控 InfoSeeker 系统性搜索（epistemic value）
+  G6b 扫掠恒开（无落差门控）：分离"扫掠机制" vs "落差门控"贡献
   G3 RL+解锁奖励：参考
   G4 去反射+目标层：排除反射锚定混淆
 
-判定（n=3）：G6 ≥ 2/3 成功 且 显著优于 G5（定向搜索提供探索率之外的增量）
+判定（n=3）：① G6 ≥ 2/3 成功 且 显著优于 G5（扫掠 > 随机探索）
+          ② G6 优于 G6b（落差门控提供增量）
 说明：n=3 单环境，结论为弱支持/配置有效性，公理④ 精炼需进一步消融。
 """
 import sys, os
@@ -215,7 +217,7 @@ def test():
     g2 = run_group("G2 目标层（探索调制）", lambda seed=0: run_fakeagi(True, seed=seed))
     g5 = run_group("G5 恒定0.8探索+无目标层", lambda seed=0: run_fakeagi(False, const_explore=0.8, seed=seed))
     g6 = run_group("G6 目标层+定向扫掠", lambda seed=0: run_fakeagi(True, use_info_seek=True, seed=seed))
-    g6b = run_group("G6b 扫掠恒开+无目标层", lambda seed=0: run_fakeagi(False, info_seek_always=True, seed=seed))
+    g6b = run_group("G6b 扫掠恒开（无落差门控）", lambda seed=0: run_fakeagi(False, info_seek_always=True, seed=seed))
     g3 = run_group("G3 RL+解锁中间奖励", lambda seed=0: run_rl(True, seed=seed))
     g4 = run_group("G4 去反射+目标层", lambda seed=0: run_fakeagi(True, True, seed=seed))
 
