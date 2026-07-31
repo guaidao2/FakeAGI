@@ -139,6 +139,13 @@ class AGI:
                 "world_model",
                 grow_fn=lambda d: None,  # WM 随 LNN hidden 生长，不随观测
                 dim_fn=lambda: self.cognition.world_model.input_dim)
+            # 薛定谔叠加态世界模型：分支分裂也是生长（注册进协调器）
+            wm = self.cognition.world_model
+            if hasattr(wm, "split") and "world_branches" not in self.growth.modules:
+                self.growth.register(
+                    "world_branches",
+                    grow_fn=lambda d: wm.split() or None,
+                    dim_fn=lambda: len(wm.branches))
         # 检测观测抽象维度变化
         abs_dim = self.cognition.obs_dim
         if self._last_abstract_dim is not None and abs_dim > self._last_abstract_dim:

@@ -31,7 +31,15 @@ class CognitionPipeline:
         self.obs_abstraction = ObservationAbstraction(raw_dim=input_dim,
                                                       max_channels=cfg.get("max_channels", 16))
         self.lnn = LNN(input_dim=input_dim + self.self_state_dim, hidden_dim=hidden_dim)
-        self.world_model = WorldModel(input_dim=hidden_dim)
+        # 薛定谔叠加态世界模型（默认启用；config 可关闭）
+        if cfg.get("superposition_world", True):
+            from cognition.temporal.superposition_world import SuperpositionWorldModel
+            self.world_model = SuperpositionWorldModel(
+                input_dim=hidden_dim, n_actions=n_actions,
+                n_branches=cfg.get("n_branches", 3),
+                max_branches=cfg.get("max_branches", 7))
+        else:
+            self.world_model = WorldModel(input_dim=hidden_dim)
         # P1b: 多专家世界模型（分情境预测增强，可选启用）
         self.expert_world = MultiExpertWorldModel(input_dim=hidden_dim)
         self.surprise_computer = SurpriseComputer()
@@ -118,12 +126,31 @@ class CognitionPipeline:
         act_t = torch.tensor([self.last_action_taken], device=self.device)
         
         if prev_h is not None and self.hidden is not None:
+            self._process_tick = getattr(self, '_process_tick', 0) + 1
             with torch.no_grad():
-                pred = self.world_model.predict(prev_h, action=act_t)
-            surprise = self.surprise_computer.compute(
-                pred.cpu().numpy().flatten(),
-                self.hidden.detach().cpu().numpy().flatten()
-            )
+                # 薛定谔叠加态世界模型：多分支预测 → 观测坍缩
+                if hasattr(self.world_model, "predict_dist"):
+                    preds, amps = self.world_model.predict_dist(prev_h, action=act_t)
+                    # 坍缩：用真实观测更新分支振幅，返回残余熵（量子化惊奇）
+                    quantum_surprise = self.world_model.collapse_with_predictions(
+                        preds, self.hidden.detach(), tick=self._process_tick)
+                    pred = sum(a * p for a, p in zip(amps, preds))
+                    surprise = max(self.surprise_computer.compute(
+                        pred.cpu().numpy().flatten(),
+                        self.hidden.detach().cpu().numpy().flatten()),
+                        quantum_surprise * 0.3)  # 融合：预测误差 + 坍缩不确定性
+                    # 分支分裂（生长）：全局坍缩失败 → 世界模型容量不足
+                    if self.world_model.should_split():
+                        if self.world_model.split():
+                            if getattr(self, 'verbose', False):
+                                print(f"[SUPERPOSITION] 分支分裂 → "
+                                      f"{len(self.world_model.branches)} 分支", flush=True)
+                else:
+                    pred = self.world_model.predict(prev_h, action=act_t)
+                    surprise = self.surprise_computer.compute(
+                        pred.cpu().numpy().flatten(),
+                        self.hidden.detach().cpu().numpy().flatten()
+                    )
             
             # 误差通路选择：误差是否可通过行动消除？
             # 如果惊奇主要来自空间位置偏差 → 行动通路（调整导航）
