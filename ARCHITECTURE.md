@@ -59,6 +59,9 @@ agi/
 │   │   ├── organ.py         # Organ：原语链 + fitness(误差下降量) + replicate/mutate/prune
 │   │   └── generator.py     # OrganGenerator：超量生成+竞争选择+生存门控
 │   │
+│   ├── language/            # 语言器官（符号接地）
+│   │   └── grounding.py     # LinguisticOrgan：token嵌入+编码器+word_probe 说话；SymbolGrounding：接地训练
+│   │
 │   ├── decision/            # 决策
 │   │   ├── gamenn.py        # GameNN多策略博弈（Q网络+策略权重+TD学习）
 │   │   └── committee.py     # 人脑式决策委员会：5决策者并行投票+加权仲裁
@@ -136,6 +139,18 @@ agi/
 - **接入**：`len(obs) ≥ 16` 触发器官路径（低维直通零行为变化）；器官成熟后压缩观测（64D→8D）并重建观测抽象层；注册进生长协调器（`perception_organ`）。
 
 验证：`test_organ_gen.py`（64D 像素流：t=0 超量生成 3 候选 → t=80 竞争保留 conv → t=36 找到隐藏食物，6/6 通过）。
+
+## 语言器官（符号接地）
+
+对应哲学底座之 ⑧ 符号压缩 的实现。设计文档：`DESIGN_LANGUAGE.md`。
+
+- **核心原理**：语言 = 又一个感知器官。词的意义 = 预测收益——一个词"有意义"当且仅当听到它能降低世界模型预测误差。
+- **理解**（`cognition/language/grounding.py`）：`LinguisticOrgan`（token 嵌入 + 位置编码 + 编码器）把词序列压成语言向量，拼入观测；`train_grounding` 用"词→状态方向"回归做真实梯度接地训练。
+- **说话**：`word_probe`（LNN hidden → 词偏好）——系统用内部状态描述世界（最小描述长度原则，非词循环）。
+- **词汇生长**：`grow_vocab` 扩展 Embedding + word_probe 输出（保留旧权重与输入维度）。
+- **接入**：`config.language=True` 开启（默认关闭，低维环境零影响）。
+
+验证：`test_language.py`（阶段1 接地训练 loss=0.016 → 阶段2 理解：词→状态误差 0.405 vs 随机基线 0.525 → 阶段3 说话：纯状态→词准确率 40%，3/3 通过）。
 
 ## 哲学底座（决定架构选择的十条原理）
 

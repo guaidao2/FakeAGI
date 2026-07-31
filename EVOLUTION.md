@@ -196,8 +196,9 @@ session 结束（死亡/主动保存）
 - [x] **P3：种群演化**（`test_evolution.py`）— 多代多个体，致命危险区选择压力，跨代改善验证（787→800）
 - [x] **P4：薛定谔叠加态世界模型**（`cognition/temporal/superposition_world.py`）— 多分支叠加/坍缩/分裂，A/B 学习快 39%
 - [x] **P6：感知器官生长**（`cognition/perception/`）— 高维输入自动长出感知器官（超量生成→竞争选择→结构生长），`test_organ_gen.py` 通过
+- [x] **P7：语言接口 / 符号接地**（`cognition/language/`）— 语言器官（理解+说话，词义=预测收益），`test_language.py` 通过；设计见 `DESIGN_LANGUAGE.md`
 - [ ] P3b：多实例并行（当前串行，可并行化）
-- [ ] P7：语言接口 / 符号接地
+- [ ] P8：句法/语法层 + 长文本生成
 
 验证：
 - `python test_persist.py` — checkpoint 往返 ✅
@@ -205,5 +206,6 @@ session 结束（死亡/主动保存）
 - `python test_evolution.py` — 跨代演化 ✅
 - `python test_superposition.py` — 叠加态坍缩 ✅
 - `python test_organ_gen.py` — 器官生长 ✅
+- `python test_language.py` — 语言接地 ✅
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
