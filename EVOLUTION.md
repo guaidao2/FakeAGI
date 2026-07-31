@@ -216,5 +216,6 @@ session 结束（死亡/主动保存）
 - `python test_language_survival.py` — 语言生存压力 ✅
 - `python test_language_intent.py` — 语言意图 ✅
 - `python test_control_ab.py` — 对照实验（预测误差 vs RL，如实记录非判定）
+- `python test_goal_layer.py` — 目标层消融（E13，n=3 弱支持）
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
