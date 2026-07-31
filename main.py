@@ -21,6 +21,12 @@ from cognition.danger import DangerSystem
 from cognition.sleep import SleepCycle
 from cognition.hemin import OtherModel
 from cognition.metacognition.core import MetacognitionLayer
+from cognition.metacognition.strategy_manager import LearningStrategyManager
+from cognition.latent_state import LatentStateModel
+from cognition.attention import AttentionGate
+from cognition.concept_bank import ConceptBank
+from core.physics_intuition import PhysicsPrior
+from core.value_system import EvolvableValueSystem
 
 
 class AGI:
@@ -39,6 +45,14 @@ class AGI:
         self.danger_system = DangerSystem()
         self.sleep_cycle = SleepCycle()
         self.other_model = OtherModel()
+        
+        # ─── 六大缺口模块 ───
+        self.physics = PhysicsPrior()          # 物理直觉
+        self.latent_state = LatentStateModel() # 隐变量
+        self.attention = None                  # 注意力（obs_dim 确定后创建）
+        self.concept_bank = ConceptBank()      # 概念库（组合式反事实）
+        self.strategy_mgr = LearningStrategyManager()  # 元-元认知
+        self.value_system = EvolvableValueSystem()     # 可进化价值系统
         
         # ─── 环境 ───
         self.env = None
@@ -78,6 +92,16 @@ class AGI:
                 self.pos = self.env.get_pos()
         else:
             obs = np.zeros(4)
+        
+        # ─── 1b. 注意力门控 ───
+        if self.attention is None:
+            self.attention = AttentionGate(obs_dim=len(obs))
+        drive_vec_now = self.drives.get_state_vector() if hasattr(self.drives, 'get_state_vector') else None
+        obs = self.attention.update(obs, drive_vec_now)
+        
+        # ─── 1c. 物理先验检查 ───
+        if hasattr(self, 'prev_pos') and self.prev_pos is not None:
+            self.physics.check_teleport(self.prev_pos, self.pos)
         
         # ─── 2. 危险感知 ───
         threat = self.danger_system.sense(obs, self.tick)
@@ -119,6 +143,12 @@ class AGI:
         
         # ─── 5. 自模型更新标记位（实际更新放到认知处理之后） ───
         surprise = 0.0
+        
+        # ─── 5. 隐变量推断 ───
+        surprise_hint = surprise
+        latent_found = self.latent_state.observe_prediction_error(surprise_hint, self.tick, obs)
+        # 隐变量上下文拼接到自模型状态
+        latent_ctx = self.latent_state.get_context_vector()
         
         # ─── 6. 驱动力更新 ───
         body_state = self.body.get_state_dict()
@@ -336,6 +366,34 @@ class AGI:
         self.other_model.record_self_action(action, tuple(self.pos), dominant_drive)
         divergence = self.other_model.update()
         
+        # ─── 10c. 概念提取（组合式反事实的原料） ───
+        try:
+            self.concept_bank.extract_from_obs(obs, action, {"energy_delta": energy_delta})
+        except Exception:
+            pass
+        
+        # ─── 10d. 元-元认知：学习策略管理 ───
+        try:
+            wloss = surprise  # 用 surprise 作为误差代理
+            strategy = self.strategy_mgr.update(
+                world_loss=wloss, surprise=surprise,
+                confidence=getattr(self.cognition, 'confidence', 0.5) if self.cognition else 0.5,
+                health=self.body.health)
+            strat_params = self.strategy_mgr.get_parameters()
+            if strat_params.get("force_grow") and self.cognition:
+                self.cognition._check_growth(wloss)
+        except Exception:
+            pass
+        
+        # ─── 10e. 价值系统进化 ───
+        try:
+            if energy_delta > 0.02:
+                self.value_system.update_with_experience("food", min(1.0, energy_delta * 3))
+            elif energy_delta < -0.02 and self.body.health < 0.3:
+                self.value_system.update_with_experience("danger", -0.5)
+        except Exception:
+            pass
+        
         # ─── 11. 紧急检测 ───
         self.survival_ticks += 1
         # 睡眠额外恢复（只有真正进入睡眠状态才恢复）
@@ -349,6 +407,7 @@ class AGI:
         
         # ─── 记录 ───
         self.last_action = action
+        self.prev_pos = tuple(self.pos) if hasattr(self, 'pos') else None
         
         return {
             "tick": self.tick,
