@@ -142,16 +142,19 @@ class AGI:
         # 检测观测抽象维度变化
         abs_dim = self.cognition.obs_dim
         if self._last_abstract_dim is not None and abs_dim > self._last_abstract_dim:
-            # 观测抽象层增长 → 记录协调事件（pipeline 内部已 grow_input，
-            # 协调器负责记账 + 同步其他模块）
+            # 观测抽象层增长 → 协调器记账 + 同步其他模块
             target = abs_dim + self.cognition.self_state_dim
-            self.growth.growth_events += 1
-            self.growth.history.append(
-                (self.growth.growth_events, "obs_growth", ["obs_abstraction", "lnn"]))
-            if self.growth.log:
-                print(f"[GROWTH] 协调生长 #{self.growth.growth_events} "
-                      f"(obs_growth): obs {self._last_abstract_dim}→{abs_dim}D", flush=True)
-            self.growth.sync_to(target, source="obs_growth")
+            grown = self.growth.sync_to(target, source="obs_growth")
+            if not grown:
+                # pipeline 内部已 grow_input，这里仅记录同步事件（不重复计数）
+                self.growth.growth_events += 1
+                self.growth.history.append(
+                    (self.growth.growth_events, "obs_growth",
+                     ["obs_abstraction", "lnn"]))
+                if self.growth.log:
+                    print(f"[GROWTH] 观测同步 #{self.growth.growth_events}: "
+                          f"obs {self._last_abstract_dim}→{abs_dim}D "
+                          f"(pipeline 已生长)", flush=True)
             # MoE 维度协调：记录到协调器（不直接改 state_dim，避免破坏已有专家）
             if self.moe is not None:
                 print(f"[GROWTH] MoE 需协调: 当前 state_dim={self.moe.state_dim}, "

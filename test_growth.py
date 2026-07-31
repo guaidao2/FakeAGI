@@ -9,7 +9,6 @@ P4 验证 — 观测维度增长 → 全链路协调生长
      - LNN 输入维度同步扩展（grow_input）
      - 不崩溃、继续决策
      - 生长协调器记录了生长事件
-  4. checkpoint 往返后观测抽象层恢复
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
