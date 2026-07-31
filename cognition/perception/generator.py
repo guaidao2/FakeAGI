@@ -77,13 +77,15 @@ class OrganGenerator:
 
     # ─── 竞争期推进 ───
     def competition_step(self, modality: str, error_by_organ: dict):
-        """每 tick 调用：更新各候选 fitness"""
+        """每 tick 调用：更新各候选 fitness
+        只更新本轮有真实误差的候选（未评估的跳过——不吃默认值，
+        避免"tick0 没被选中"的伪偏差）"""
         if modality not in self.candidates:
             return
         for organ in self.candidates[modality]:
-            err = error_by_organ.get(organ.organ_id, 1.0)
-            organ.update_fitness(err)
             organ.age += 1
+            if organ.organ_id in error_by_organ:
+                organ.update_fitness(error_by_organ[organ.organ_id])
 
     # ─── 候选器官轮流评估（Blocking 修复：让候选真的处理输入）───
     def evaluate_candidates(self, modality: str, obs: np.ndarray,

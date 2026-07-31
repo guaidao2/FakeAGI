@@ -93,6 +93,7 @@ class CognitionPipeline:
         self.organ_errors = {}     # organ_id -> 预测误差（竞争期用）
         self._organ_competition_obs = None  # 竞争期候选输出缓存
         self._organ_competition_raw = None  # 竞争期原始输入维度
+        self._in_competition = False        # 竞争期标志（obs 被压缩后仍走器官路径）
     
     def process(self, obs: np.ndarray, self_state: np.ndarray,
                 exploration_ratio: float = 0.0,
@@ -100,8 +101,11 @@ class CognitionPipeline:
         # P6: 器官感知 — 高维输入自动生成器官（低维直通，零行为变化）
         organ_processed = False
         self.organ_active = None
-        if self.organ_generator is not None and len(obs) >= 16:
-            modality = self.organ_generator.infer_modality(len(obs))
+        in_competition = getattr(self, '_in_competition', False)
+        if self.organ_generator is not None and (len(obs) >= 16 or in_competition):
+            modality = self.organ_generator.infer_modality(
+                len(obs) if len(obs) >= 16
+                else self._organ_competition_raw or 64)
             organ = self.organ_generator.get_organ(modality)
             # 无成熟器官且无候选 → 生成候选（超量生成；生存门控：
             # 饥饿/威胁高时 survival_state 低 → 不生成新器官）
@@ -110,9 +114,11 @@ class CognitionPipeline:
                     and survival_state >= self.organ_generator.survival_gate):
                 self.organ_generator.generate_candidates(modality, len(obs),
                                                          n_candidates=3)
+                self._in_competition = True
+                self._organ_competition_raw = len(obs)
             if organ is None and modality in self.organ_generator.candidates:
-                # 竞争期：候选器官轮流处理输入（各候选 fitness 由真实误差驱动）
-                # 注意：不替换 obs（保持原维度，让下一 tick 继续走器官路径）
+                # 竞争期：候选器官轮流处理输入，**候选输出真正替换观测**
+                # → 世界模型对该候选"眼睛"的预测误差即其 fitness（真驱动）
                 cand_out = self.organ_generator.evaluate_candidates(
                     modality, obs, self.device)
                 if self.organ_generator._active_candidate is not None:
@@ -120,9 +126,16 @@ class CognitionPipeline:
                     self.organ_active = None
                     self._organ_competition_obs = cand_out
                     self._organ_competition_raw = len(obs)
+                    # 候选输出替换观测（固定维度，避免维度死锁）
+                    obs = cand_out
+                    # 重建观测抽象层（候选输出 8D 语义）
+                    if len(obs) != self.obs_abstraction.raw_dim:
+                        self.obs_abstraction = ObservationAbstraction(
+                            raw_dim=len(obs),
+                            max_channels=self.config.get("max_channels", 16))
             if organ is not None:
                 try:
-                    # 用器官处理观测（保持 device 一致）
+                    # 用成熟器官处理观测（保持 device 一致）
                     obs_t = torch.tensor(obs, dtype=torch.float32,
                                          device=self.device).unsqueeze(0)
                     organ = organ.to(self.device)
@@ -132,12 +145,12 @@ class CognitionPipeline:
                         obs = processed
                         self.organ_active = organ
                         organ_processed = True
-                        # Blocking 修复：器官压缩后重建观测抽象层（raw_dim 语义
-                        # 跟随实际观测，避免"曾经最大维度"与器官输出冲突）
+                        # 器官压缩后重建观测抽象层（raw_dim 语义跟随实际观测）
                         if len(obs) != self.obs_abstraction.raw_dim:
                             self.obs_abstraction = ObservationAbstraction(
                                 raw_dim=len(obs),
                                 max_channels=self.config.get("max_channels", 16))
+                        self._in_competition = False
                 except Exception:
                     organ_processed = False
 
@@ -213,17 +226,15 @@ class CognitionPipeline:
                     )
                 # P6: 器官竞争期误差注入（候选器官的 fitness 依据）
                 if self.organ_generator is not None:
-                    # 竞争期：把误差写入当前被轮换评估的候选
-                    if self.organ_generator._active_candidate is not None:
+                    # 竞争期：把世界模型误差写入当前被轮换评估的候选
+                    # （候选输出已替换 obs → 该误差即候选"眼睛"的感知质量）
+                    if getattr(self, '_in_competition', False):
                         cid = self.organ_generator._active_candidate
-                        self.organ_errors[cid] = surprise
-                        # 推进竞争期（用原始输入维度推断模态——候选输出是压缩后的 8D）
+                        if cid is not None:
+                            self.organ_errors[cid] = surprise
+                        # 推进竞争期（用原始输入维度推断模态）
                         modality = self.organ_generator.infer_modality(
-                            len(obs) if len(obs) >= 16
-                            else (self._organ_competition_raw
-                                  if hasattr(self, '_organ_competition_raw')
-                                  and self._organ_competition_raw is not None
-                                  else len(obs)))
+                            self._organ_competition_raw or 64)
                         if modality in self.organ_generator.candidates:
                             self.organ_generator.competition_step(
                                 modality, self.organ_errors)
@@ -234,6 +245,7 @@ class CognitionPipeline:
                                 # 结算后清理 organ_errors（防泄漏）
                                 self.organ_errors.clear()
                                 self._organ_competition_obs = None
+                                self._in_competition = False
                                 if best is not None:
                                     self.organ_cache[modality] = (len(obs), best)
                                     if getattr(self, 'verbose', False):
