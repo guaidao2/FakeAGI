@@ -93,51 +93,62 @@ class CrossDomainTransfer:
         return tgt
 
     def few_shot_finetune(self, model_weights: dict, samples: list,
-                          lr: float = 0.01, epochs: int = 50) -> dict:
-        """少样本微调：迁移后的底层作特征提取器，顶层在其输出上拟合
-        这使迁移的底层（时序动力学先验）真正参与——而非仅初始化"""
+                          lr: float = 0.01, epochs: int = 200,
+                          freeze_bottom: bool = False) -> dict:
+        """少样本微调：**全模型 SGD 微调**（W_h 投影层 + theta 顶层都更新）
+        freeze_bottom=False（默认）：迁移的底层也参与学习——证明迁移是
+        "更好的起点"而非"仅初始化"；freeze_bottom=True 时只调顶层（对照）。
+        这是公平基线的前提：迁移组与从头组都用同样的微调预算更新全模型。"""
         w = dict(model_weights)
         if not samples:
             return w
         xs = np.atleast_2d(np.array([s[0] for s in samples], dtype=float))
         ys = np.atleast_2d(np.array([s[1] for s in samples], dtype=float))
-        # NaN/Inf 过滤：非有限样本在 lstsq 前剔除（防 NaN 传播进 _top_adapter）
+        # NaN/Inf 过滤
         finite = np.isfinite(xs).all(axis=1) & np.isfinite(ys).all(axis=1)
         if not np.all(finite):
             xs = xs[finite]
             ys = ys[finite]
         if len(xs) == 0:
             return w
-        # 用迁移后的底层（W_h 若存在）做特征投影
-        features = xs
-        if "W_h" in w:
-            Wh = np.asarray(w["W_h"], dtype=float)
-            # 投影到隐藏空间 + tanh 激活（非线性特征——像 LNN 隐藏层）
-            d = min(Wh.shape[0], xs.shape[1])
-            if d >= 2:
-                proj = xs[:, :d] @ Wh[:d, :min(Wh.shape[1], 16)]
-                features = np.tanh(proj)
-        X = np.hstack([features, np.ones((len(xs), 1))])
-        try:
-            theta, *_ = np.linalg.lstsq(X, ys, rcond=None)
-        except np.linalg.LinAlgError:
-            return w
+
+        d_in = xs.shape[1]
+        k = 16  # 隐藏维度
+        # W_h：迁移的（或随机的）投影矩阵，取前 d_in×k
+        Wh = np.asarray(w.get("W_h", np.eye(d_in)), dtype=float)
+        if Wh.shape[0] < d_in or Wh.shape[1] < k:
+            # 形状不足 → 重新初始化（防御）
+            rng = np.random.RandomState(0)
+            Wh = rng.randn(d_in, k) * 0.1
+        Wh = Wh[:d_in, :k].copy()
+        theta = np.random.RandomState(1).randn(k, d_in) * 0.1
+
+        # 全模型 SGD：h = tanh(x @ Wh); pred = h @ theta; loss = MSE
+        for _ in range(epochs):
+            h = np.tanh(xs @ Wh)          # (n, k)
+            pred = h @ theta              # (n, d_in)
+            err = pred - ys               # (n, d_in)
+            d_theta = h.T @ err / len(xs)           # (k, d_in)
+            dh = err @ theta.T                      # (n, k)
+            d_Wh = xs.T @ (dh * (1.0 - h ** 2)) / len(xs)
+            theta -= lr * d_theta
+            if not freeze_bottom:
+                Wh -= lr * d_Wh
+
         w["_top_adapter"] = theta
-        w["_feat_dim"] = features.shape[1]
+        w["_W_h_proj"] = Wh
         return w
 
     def predict(self, w: dict, obs: np.ndarray) -> np.ndarray:
-        """用迁移后的权重预测下一步（底层特征 + 顶层适配器）"""
+        """用迁移后的权重预测下一步（W_h 投影 + tanh + 顶层）"""
         if "_top_adapter" in w:
-            feat = obs
-            if "W_h" in w:
-                Wh = np.asarray(w["W_h"], dtype=float)
-                d = min(Wh.shape[0], len(obs))
-                if d >= 2:
-                    proj = obs[:d] @ Wh[:d, :min(Wh.shape[1], 16)]
-                    feat = np.tanh(proj)
-            x = np.hstack([feat, [1.0]])
-            return x @ w["_top_adapter"]
+            Wh = np.asarray(w["_W_h_proj"], dtype=float)
+            d = min(Wh.shape[0], len(obs))
+            if d >= 2:
+                feat = np.tanh(obs[:d] @ Wh[:d, :])
+            else:
+                feat = obs
+            return feat @ w["_top_adapter"]
         return obs  # 无适配器→恒等（未迁移）
 
     def similarity(self, w1: dict, w2: dict) -> float:
