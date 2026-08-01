@@ -47,7 +47,7 @@ class ConceptEnv:
             self.item = [self.rng.randint(size), self.rng.randint(size)]
             if self.item != [0, 0]:
                 break
-        self.appearance = {"food": 0.2, "water": 0.5, "fruit": 0.8}[mode]
+        self.appearance = {"food": 0.2, "water": 0.5, "fruit": 0.8}.get(mode, 0.5)
 
     def observe(self):
         x, y = self.pos
