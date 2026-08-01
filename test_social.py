@@ -154,8 +154,70 @@ def make_agi(env):
     return agi
 
 
+class GoalPersistence:
+    """目标坚持机制（用户洞察操作化）：
+    坚持 = 目标未完成（"没做完"本身是理由）→ 保持动作（停留工作）
+    放弃 = 重大预测误差 → 换路：
+      - surprise 飙升（工作无效/预期冲突）
+      - 能量危机（<0.2 强制换路）
+      - 他者抢占同一食物（冲突）
+    可开关（goal_enabled on/off 对照）"""
+    def __init__(self, surprise_threshold=0.6, energy_floor=0.2):
+        self.target = None          # 当前目标食物格 (x,y)
+        self.progress_seen = 0      # 已见最大进度
+        self.stall_ticks = 0        # 进度停滞 tick 数
+        self.surprise_threshold = surprise_threshold
+        self.energy_floor = energy_floor
+        self.abandoned = 0          # 放弃计数（诚实记录）
+        self.completed = 0          # 完成计数
+        self.stick_actions = 0      # 坚持动作数
+
+    def reset(self):
+        self.target = None
+        self.progress_seen = 0
+        self.stall_ticks = 0
+
+    def decide(self, env, who, pos, action, progress_now, surprise,
+               energy, other_pos):
+        """返回 (最终动作, 是否坚持)：
+        目标未完成→坚持（动作 0 停留）；重大预测误差→放弃（换路）"""
+        on_food = tuple(pos) in [tuple(f) for f in env.foods]
+        if on_food and env.gather_cost > 0:
+            if self.target != tuple(pos):
+                self.target = tuple(pos)      # 新目标：进入坚持
+                self.progress_seen = 0
+                self.stall_ticks = 0
+            # 放弃条件（重大预测误差）
+            abandon = False
+            if surprise > self.surprise_threshold:
+                abandon = True                # surprise 飙升
+            elif energy < self.energy_floor:
+                abandon = True                # 能量危机
+            elif other_pos is not None and tuple(other_pos) == tuple(pos):
+                abandon = True                # 他者抢占同一格
+            if progress_now > self.progress_seen:
+                self.progress_seen = progress_now
+                self.stall_ticks = 0
+            else:
+                self.stall_ticks += 1
+                if self.stall_ticks > 5 and progress_now == 0:
+                    abandon = True            # 工作 5 tick 无进展（进度重置）
+            if abandon:
+                self.abandoned += 1
+                self.target = None
+                return action, False          # 放弃：让 AGI 自主决策
+            # 坚持：停留工作
+            self.stick_actions += 1
+            return 0, True
+        if self.target is not None:
+            self.completed += 1               # 离开食物格（获得或放弃后）
+            self.target = None
+        return action, False
+
+
+
 def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
-               other_enabled=True):
+               other_enabled=True, goal_enabled=False):
     """双 AGI 共跑；返回指标"""
     env = World2(seed=seed, n_food=n_food, gather_cost=gather_cost)
     agi_a = make_agi(env)
@@ -188,24 +250,61 @@ def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
     agi_a._other_agent_enabled = other_enabled
     agi_b._other_agent_enabled = other_enabled
     deaths = {"a": None, "b": None}
+    goals = {"a": GoalPersistence(), "b": GoalPersistence()} \
+        if goal_enabled else None
+    goal_stats = {"a": {}, "b": {}} if goal_enabled else None
     for t in range(max_ticks):
         for who, agi, ad in (("a", agi_a, env_a), ("b", agi_b, env_b)):
             if not agi.alive:
                 if deaths[who] is None:
                     deaths[who] = t
                 continue
-            agi.step()
+            if goals is not None:
+                # 目标坚持机制：工作进度 = env 当前格进度
+                pos = list(env.pos_a if who == "a" else env.pos_b)
+                prog = env.gather_progress.get((who, tuple(pos)), 0) \
+                    if env.gather_cost > 0 else 1.0
+                other_pos = env.pos_b if who == "a" else env.pos_a
+                # 预演：取 AGI 将执行的动作前先算 surprise/energy
+                # （main.step 内部计算——用上一次结果近似，见下）
+                # 直接调用 agi.step 获取结果后覆盖下一 tick 动作不可行——
+                # 采用"包装决策"：先让 AGI 决策，若在目标上则覆盖为停留
+                action = agi.last_action if hasattr(agi, 'last_action') else 1
+                # 计算坚持决策（用上一 tick 的 surprise/energy）
+                surp = getattr(agi, 'last_surprise', 0.0)
+                en = agi.body.energy
+                final_a, _ = goals[who].decide(
+                    env, who, pos, action, prog, surp, en, other_pos)
+                # 手动执行停留：环境步进 + 能量代谢（与 AGI step 等效的最小路径）
+                if final_a == 0 and tuple(pos) in [tuple(f) for f in env.foods]:
+                    r = env.step(who, 0, target_food=tuple(pos))
+                    agi.body.energy = max(0.0, agi.body.energy + r - 0.001)
+                    agi.last_action = 0
+                else:
+                    agi.step()
+            else:
+                agi.step()
             if not agi.alive and deaths[who] is None:
                 deaths[who] = t
+    if goal_stats is not None:
+        for who in ("a", "b"):
+            goal_stats[who] = {
+                "stick": goals[who].stick_actions,
+                "abandoned": goals[who].abandoned,
+                "completed": goals[who].completed,
+            }
     surv_a = deaths["a"] if deaths["a"] is not None else max_ticks
     surv_b = deaths["b"] if deaths["b"] is not None else max_ticks
-    return {
+    res = {
         "food": env.food_eaten,
         "conflicts": env.conflicts,
         "deaths": deaths,
         "survival": (surv_a + surv_b) / 2,  # 平均存活
         "surv_gap": abs(surv_a - surv_b),   # 存活差（小=共存/轮流）
     }
+    if goal_stats is not None:
+        res["goal"] = goal_stats
+    return res
 
 
 def run_single(seed=0, max_ticks=3000, n_food=4, gather_cost=0):
@@ -244,6 +343,44 @@ def main():
     print("路线 C — 多智能体社会实验（稀缺度梯度 × 获取成本）")
     print("=" * 60)
     seeds = (42, 7, 2026)
+
+    # ── 目标坚持机制验证（用户洞察：坚持=目标未完成，放弃=重大预测误差）──
+    print("\n=== 目标坚持机制验证（gather_cost=15）===")
+    goal_on = goal_off = 0
+    stick_total = 0
+    for s in seeds:
+        np.random.seed(s)
+        torch.manual_seed(s)
+        r_on = run_social(seed=s, n_food=2, gather_cost=15,
+                          goal_enabled=True)
+        goal_off += run_social(seed=s, n_food=2, gather_cost=15,
+                               goal_enabled=False)["food"]
+        goal_on += r_on["food"]
+        stick_total += sum(g["stick"] for g in r_on["goal"].values())
+    print(f"  目标机制开: 食物={goal_on}（×3seeds）| 关: 食物={goal_off}"
+          f"（坚持动作 {stick_total} 次）")
+    persist_ok = goal_on > goal_off * 2  # 坚持机制显著提升完成率（>2x）
+    print(f"  坚持有效{'OK' if persist_ok else 'FAIL'}"
+          f"（开 > 关×2 为判据）")
+    # 放弃验证：工作 5 tick 无进展（进度重置）→ 放弃换路
+    # 用 GoalPersistence 单元验证：stall 检测
+    gp = GoalPersistence()
+    env = World2(seed=1, n_food=1, gather_cost=15)
+    env.pos_a = list(env.foods[0])  # 站在食物上
+    stuck = 0
+    for _ in range(8):
+        # 进度不涨（模拟工作无效）
+        a, pers = gp.decide(env, "a", env.pos_a, 1, 0, 0.1, 0.9, None)
+        if not pers:
+            stuck += 1
+    abandon_ok = stuck > 0  # 工作 5 tick 无进展 → 放弃（stall 触发）
+    print(f"  放弃验证（进度停滞）: {stuck}/8 次放弃 "
+          f"{'OK' if abandon_ok else 'FAIL'}（重大预测误差→换路）")
+    if persist_ok and abandon_ok:
+        print("  目标坚持机制验证通过——解锁假说后半（丰富难得→共存）")
+    else:
+        print("  目标坚持机制未通过——如实记录（坚持/放弃部分失效）")
+
     # 稀缺度梯度（用户生物学假设验证）：
     #   n_food 少 = 资源稀缺（易冲突）；n_food 多但 gather_cost 高 =
     #   资源丰富但难得（可能合作/共存——假说后半补验）
@@ -266,7 +403,8 @@ def main():
         for s in seeds:
             np.random.seed(s)          # 每 seed 独立重置（security low）
             torch.manual_seed(s)
-            soc = run_social(seed=s, **cfg)
+            # 目标坚持机制开启（解锁假说后半——AGI 能完成工作后测共存）
+            soc = run_social(seed=s, **cfg, goal_enabled=True)
             single = run_single(seed=s, **cfg)
             rows.append((s, soc, single))
             print(f"  [{label}] seed{s}: 双食物={soc['food']} 冲突={soc['conflicts']} "
