@@ -15,10 +15,11 @@
 设计（预注册）：
   - World2：8x8 共享世界，食物 3 个（稀缺），2 个 AGI 交替 step
   - 观测：各自 4D 基础观测 + 他者位置（他者模型消费）
-  - 指标：存活/食物/冲突次数（同时目标同一食物）/平均间距
+  - 指标：存活/食物/冲突事件（去重）/平均存活
   - 对比：双 AGI vs 单 AGI（同布局同食物数，基线）
-  - 判定：双 AGI 均存活 + 冲突>0（社会行为出现）+ 双总食物 ≥ 单基线（不拖累）
-  - 3 seeds 独立 + 布局分离 + 判定取最差
+  - 判定（v2，时间线记录在 main()）：人均食物不拖累（双人均 ≥ 单人均）
+    + 社会行为（冲突事件>0）+ 存活不短（双平均存活 ≥ 单存活）
+  - 3 seeds 独立 + 判定取最差
 """
 import sys, os
 import numpy as np
@@ -36,12 +37,13 @@ class World2:
         self.pos_a = [1, 1]
         self.pos_b = [6, 6]
         self.foods = []
-        for _ in range(5):   # 5 食物（3 太少——AGI 全饿死无法观察社会行为）
+        for _ in range(4):   # 4 食物（稀缺但可存活；5 无竞争压力、3 全饿死）
             self._respawn_food()
         self.food_eaten = 0
-        self.conflicts = 0        # 同 tick 双方目标同一食物的次数
+        self.conflicts = 0        # 冲突事件（目标切换时计 1 次——去重）
         self.last_target_a = None
         self.last_target_b = None
+        self._conflict_open = False
 
     def _respawn_food(self):
         while True:
@@ -72,18 +74,21 @@ class World2:
         ], dtype=np.float32)
 
     def step(self, who, action, target_food=None):
-        """执行动作；记录冲突（双方目标同一食物）"""
+        """执行动作；冲突事件计数（去重：双方目标同一食物期间只计 1 次，
+        目标切换后才开新事件——review should-fix：原每 tick 重复计数）"""
         pos = self.pos_a if who == "a" else self.pos_b
         if who == "a":
             self.last_target_a = tuple(target_food) if target_food else None
-            if self.last_target_b and self.last_target_a \
-                    and self.last_target_b == self.last_target_a:
-                self.conflicts += 1
         else:
             self.last_target_b = tuple(target_food) if target_food else None
-            if self.last_target_a and self.last_target_b \
-                    and self.last_target_a == self.last_target_b:
-                self.conflicts += 1
+        both_target = (self.last_target_a is not None
+                       and self.last_target_b is not None
+                       and self.last_target_a == self.last_target_b)
+        if both_target and not self._conflict_open:
+            self.conflicts += 1
+            self._conflict_open = True
+        elif not both_target:
+            self._conflict_open = False
         dirs = [(0, 0), (0, -1), (-1, 0), (1, 0), (0, 1)]
         dx, dy = dirs[action % 5]
         nx = max(0, min(self.size - 1, pos[0] + dx))
@@ -110,7 +115,7 @@ class World2:
 
 
 def make_agi(env):
-    agi = AGI()
+    agi = AGI({"auto_save_on_death": False})  # 关死亡快照（review nit：6 次运行污染 checkpoints/）
     agi.set_cognition(CognitionPipeline({
         "input_dim": 6, "self_state_dim": 14,
         "hidden_dim": 64, "n_actions": 5, "n_strategies": 4,
@@ -203,22 +208,28 @@ def main():
         print(f"  seed{s}: 双AGI食物={soc['food']} 冲突={soc['conflicts']} "
               f"存活={soc['survival']:.0f} | 单AGI食物={single['food']} "
               f"存活={single['survival']:.0f}")
-    # 判定（预注册调整：'全程存活'对任何 AGI 不现实（单 AGI 也死）——
-    # 改为'社会不缩短寿命'：双 AGI 平均存活 ≥ 单 AGI 存活）
+    # 判定（v2 修正，记录时间线：v1"全程存活+总食物"不可达且不公平——
+    # 单 AGI 也死（存活 910-2150），双 AGI 6000 步 vs 单 3000 步使总食物
+    # 天然 2 倍偏向。v2 判据：人均食物不拖累（双人均 ≥ 单人均——公平）
+    # + 社会行为（冲突事件>0）+ 存活不短（双平均存活 ≥ 单存活））
+    # 人均：双 AGI 食物/2 vs 单 AGI 食物/1
+    per_cap_soc = [r[1]["food"] / 2.0 for r in rows]
+    per_cap_single = [r[2]["food"] / 1.0 for r in rows]
+    pc_min_soc = min(per_cap_soc)
+    pc_min_single = min(per_cap_single)
+    not_worse = pc_min_soc >= pc_min_single
+    any_conflict = any(r[1]["conflicts"] > 0 for r in rows)
     surv_min = min(r[1]["survival"] for r in rows)
     single_surv_min = min(r[2]["survival"] for r in rows)
     not_shorter = surv_min >= single_surv_min
-    any_conflict = any(r[1]["conflicts"] > 0 for r in rows)
-    min_soc = min(r[1]["food"] for r in rows)
-    min_single = min(r[2]["food"] for r in rows)
-    not_worse = min_soc >= min_single
-    ok = not_shorter and any_conflict and not_worse
-    print(f"\n判定: 寿命不短{'OK' if not_shorter else 'FAIL'} "
-          f"({surv_min} vs {single_surv_min}) "
+    ok = not_worse and any_conflict and not_shorter
+    print(f"\n判定: 人均不拖累{'OK' if not_worse else 'FAIL'} "
+          f"({pc_min_soc:.1f} vs {pc_min_single:.1f}) "
           f"社会行为{'OK' if any_conflict else 'FAIL'} "
-          f"不拖累{'OK' if not_worse else 'FAIL'}"
-          f"（双最差{min_soc} vs 单最差{min_single}）")
-    verdict = ("通过——双 AGI 共存+社会行为+不拖累（社会智能基础）" if ok
+          f"寿命不短{'OK' if not_shorter else 'FAIL'} "
+          f"({surv_min:.0f} vs {single_surv_min:.0f})")
+    verdict = ("通过——双 AGI 人均效率不拖累+社会行为（竞争冲突）出现"
+               "（社会智能基础，效应如实记录）" if ok
                else "未过——如实记录")
     print(f"  {verdict}")
     return 0 if ok else 1
