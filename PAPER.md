@@ -646,6 +646,14 @@ def step():
 需关系同构 → ⑥ 学会**自动判断**同构性（不再靠人设实验域对）——三连实验
 完整回答"迁移何时有效、如何判断"。
 
+**主循环接入**（`main.py` + `test_integration_transfer.py`）：
+- `set_env` 环境切换检测：首次设置不算切换，二次触发 TransferSelector 决策
+- 决策执行：transfer → 保留 GameNN Q 网络（迁移起点）；scratch → 重置
+  （从头学）；新环境跑 500 tick 后用 GameNN 置信度反馈更新可靠性
+- 默认 `_transfer_selector_enabled=False`（零影响护栏）
+- 接入验证 5 项全过：A 默认关闭零影响 / B 切换检测 / C scratch 重置 /
+  D 迁移保留 / E 无认知容错
+
 ---
 
 ## 5. 讨论
