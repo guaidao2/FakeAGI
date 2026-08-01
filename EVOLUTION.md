@@ -210,6 +210,7 @@ session 结束（死亡/主动保存）
 - [x] **C2 叠加态升级**（`SuperpositionEstimator`）— 被教歪可逆（多假设+置信度地板），4 项验证 + n=30 回归全过
 - [x] **他者模型**（`core/other_agent.py`）— 真他者跟踪（意图分类+竞争回避），多智能体实验 5 项全过
 - [x] **情绪系统**（`core/emotion.py`）— 显式情绪信号（恐惧/好奇/平静）+ 决策调制，5 项验证全过
+- [x] **安全审查闭环**（security-review）— 新模块零外部注入面（仅 numpy）；防御修复：setter NaN/Inf 回退先验+钳制、EmotionSystem 入口 isfinite 防御、hypotheses 构造校验、self.prior 补存（MEDIUM×2+LOW×1+续审×1）
 
 验证：
 - `python test_persist.py` — checkpoint 往返 ✅
