@@ -195,7 +195,10 @@ def run_single(seed=0, max_ticks=3000):
 
 
 def main():
+    import torch
     np.random.seed(42)
+    torch.manual_seed(42)  # AGI 内部 torch 网络（LNN/GameNN）必须同 seed——
+    # 缺此则每次运行 AGI 初始化不同（复检不一致暴露，E14 同款修复）
     print("=" * 60)
     print("路线 C — 多智能体社会实验（双 AGI 竞争/合作）")
     print("=" * 60)
