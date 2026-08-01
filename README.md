@@ -174,9 +174,10 @@ agi/
 > ① 定向扫掠 5 倍于随机探索（有记忆系统性搜索）② 落差门控 1.4 倍增量（只在需要时搜索）。
 > 结论：n=3 弱支持"目标导向信息寻求"（公理④ 精炼待扩大验证）。
 >
-> **② 过程选择第一阶段**（语言×目标层统一，独立控制器）：详见 `PAPER.md §4.6`——
-> 可靠性在线估计 + argmax 选择（问路 vs 扫掠），V1-V4 + N1-N4 通过（n=5 含 std）。
-> 结论：目标不变过程可换的工程验证完成；叠加态分支升级与 n=30 统计为后续。
+> **② 过程选择**（语言×目标层统一，独立控制器 + 完整主循环接入）：详见 `PAPER.md §4.6-4.7`——
+> 可靠性在线估计 + argmax 选择（问路 vs 扫掠）。V1-V4 + N1-N4 通过（n=5），
+> 完整循环 n=30 预注册判定全过（H1 支持：N2 2±0 vs N3 805±97；N1 冻结 125 vs 在线 2）。
+> 结论：目标不变过程可换在完整循环中存活且可归因；叠加态分支升级为后续。
 
 运行：`python test_experimentN.py` / `python test_superposition.py` / `python test_organ_gen.py` / `python test_language.py` / `python test_language_survival.py` / `python test_language_intent.py`
 

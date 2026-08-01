@@ -205,7 +205,8 @@ session 结束（死亡/主动保存）
 - [x] **P8b：语言即行为**（`test_language_intent.py`）— 需求驱动主动说话（`AGI.speak()`）+ 意图优先仲裁（指令加成压过反射），会说满存活 vs 不会说饿死（L4 意图）
 - [ ] P3b：多实例并行（当前串行，可并行化）
 - [ ] P8c：句法/语法层 + 长文本生成
-- [x] **② 过程选择第一阶段**（`core/process_selector.py`）— 语言×目标层统一（可靠性估计+argmax，V1-V4+N1-N4 通过，n=5）；第二阶段（接入主循环+n=30）待做
+- [x] **② 过程选择第一阶段**（`core/process_selector.py`）— 语言×目标层统一（可靠性估计+argmax，V1-V4+N1-N4 通过，n=5）
+- [x] **② 过程选择第二阶段**（接入完整主循环 + n=30 预注册）— 判定全过（H1 支持、N1 在线更新必要、零影响护栏）；C2 叠加态升级待做
 
 验证：
 - `python test_persist.py` — checkpoint 往返 ✅
@@ -219,5 +220,7 @@ session 结束（死亡/主动保存）
 - `python test_control_ab.py` — 对照实验（预测误差 vs RL，如实记录非判定）
 - `python test_goal_layer.py` — 目标层消融（E13，n=3 弱支持）
 - `python test_process_selector.py` — 过程选择（② 第一阶段，V1-V4+N1-N4，n=5）
+- `python test_process_integration.py` — 过程选择接入冒烟（② 第二阶段，6 项）
+- `python run_process_selection_study.py` — 过程选择 n=30 预注册研究（判定全过）
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
