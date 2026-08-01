@@ -212,7 +212,7 @@ def main():
         b_scr = eval_policy(few_shot(QTable(), "threat", seed_base=100 + i * 50), "threat", seed=500 + i * 50)
         sel.observe_feedback(b_mig, b_scr)
     r_after_b = sel.estimator.reliability
-    a_ok = r_after_b > 0.5
+    a_ok = r_after_b > 0.60  # 与 C1 判定阈值一致（同构经验后应≥阈值）
     print(f"[A] 同构域B×5反馈: 迁移{b_mig} vs 从头{b_scr} (末次) → 可靠性 "
           f"{r_after_b:.2f} (应>0.5) {'OK' if a_ok else 'FAIL'}")
 

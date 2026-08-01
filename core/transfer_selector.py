@@ -49,25 +49,15 @@ class TransferabilityEstimator:
         if not (np.isfinite(migrated_perf) and np.isfinite(scratch_perf)):
             success = False
             strength = 0.05
+        elif scratch_perf > 0:
+            ratio = migrated_perf / scratch_perf
+            # 连续强度函数：ratio=1 时 strength=0.4（迁移无优势=降），
+            # 偏离 1 越远强度越大（赢越多升越强、输越多降越强）——无跳变
+            strength = min(1.0, 0.4 + abs(ratio - 1.0) * 0.8)
+            success = ratio > 1.0
         else:
-            # 归一化性能差（0-1 加权系数）
-            if scratch_perf > 0:
-                ratio = migrated_perf / scratch_perf
-                if ratio >= 1.05:
-                    strength = min(1.0, (ratio - 1.0) * 0.5)  # 赢越多越强
-                    success = True
-                elif ratio <= 0.95:
-                    strength = min(1.0, (1.0 - ratio) * 0.5)  # 输越多越强
-                    success = False
-                else:
-                    # 平局（±5% 内）：迁移无优势=不值得迁移——中等强度降
-                    strength = 0.4
-                    success = False
-            else:
-                success = migrated_perf > 0
-                strength = 0.3
-        if strength < 0.05:
-            strength = 0.05  # 最小更新（平局也轻微更新）
+            success = migrated_perf > 0
+            strength = 0.3
         # 似然：假设 h 下观测到成功/失败的概率，按幅度加权
         lik = self.hypotheses if success else (1.0 - self.hypotheses)
         raw = self.weights * np.power(lik, strength)
