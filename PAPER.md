@@ -490,11 +490,11 @@ def step():
 **预注册判定（全部通过）**：
 - ✅ **H1（N2 < N3）**：2±0 vs 390±149——30/30 seeds 全部学会"不问"（零方差）
 - ✅ **效应量**：N2 零方差 → Cohen's d 不可计算 → 比值替代（2/390 = 0.005 << 0.2 阈值）
-- ✅ **N1（冻结 vs 在线）**：fail 环境冻结 125 vs 在线 2——**在线更新必要**（朋友的"被教歪"同源漏洞验证：冻结可靠性 → 一直问 → 饿死）
+- ✅ **N1（冻结 vs 在线）**：fail 环境冻结 125 vs 在线 2——**在线更新必要**（"被教歪"同源漏洞验证：冻结可靠性 → 一直问 → 饿死）
 - ✅ 零影响护栏：关闭组 ask=0
 - ✅ 无问路接口：仅试探性 ask=2（≤5）
 
-**复审驱动的修正**（外部复审发现 1 blocking + 3 should-fix，全部修复后重跑）：
+**复审驱动的修正**（外部审查指出 1 项阻断性 + 3 项应修复问题，全部修复后重跑）：
 1. **Blocking：窗口化超窗判定死代码**——`tick-at > WINDOW` 与 `<= WINDOW` 互斥，`_ask_fail` 恒 0。修复：先清理过期再判消解（冒烟 D 项现显示 fail=10）
 2. **Should-fix：noisy 答错被当成功**——`answer_query` 只返回方向不返回正确性，30% 噪声对可靠性零影响（旧数据 N3 ask=805 正源于此）。修复：返回 `(direction, correct)`，答错=失败
 3. **Should-fix：N3 噪声 30% 过硬**——修复 2 后 30% 噪声使系统学不会问路而饿死（ask=53±74，died=30/30），与预期"先试自己找"不符。按预注册原则调整为 15% 温和噪声 → ask=390±149，基本存活
@@ -677,7 +677,7 @@ def step():
 > 复审修正：A 去掉恒真 `or True`；D 改测**语言投票实际影响决策**（用
 > `_language_used_tick`，非广播计数）；E 改 **5 seeds 均值±std**（单次无法
 > 区分显著与 noise）；对照名实修正（"基础认知对照"——反射+习惯+规划+目标层，
-> 无语言/情绪/他者）。security 修复后重跑：lnn.grow 固定种子 + torch.manual_seed
+> 无语言/情绪/他者）。安全性修复后重跑：lnn.grow 固定种子 + torch.manual_seed
 > （跨运行可复现），全模块 0.6±1.2（数值有波动但结论稳定：始终≥对照）。
 
 **涌现观察**：
@@ -792,7 +792,7 @@ argmax 不变率 ≥95%，行为学表面无关性）。
 **修复暴露的连带缺口**（如实记录）：
 1. **持久化缺口**：checkpoint 未保存 `is_sleeping` → 睡眠中保存恢复后"醒来"
    行为分叉（test_persist 暴露）→ 补保存/恢复 + 测试含睡眠断言
-2. **weights_only 安全加固**（security MEDIUM 修复）：回退改**显式 opt-in**
+2. **weights_only 安全加固**（中等风险安全审查修复）：回退改**显式 opt-in**
    （`allow_fallback=False` 默认拒绝——投毒 checkpoint 无法经字符串门控
    达 pickle RCE 面）+ **save 侧 `_sanitize` 根治**（numpy array→list/
    标量→原生/int 保持——新档必然 weights_only 兼容，回退路径几乎不再
@@ -815,7 +815,7 @@ argmax 不变率 ≥95%，行为学表面无关性）。
 - 从头组初始 W_h = randn*0.1（与域 A 训练前同分布）——不削弱基线
 - 两组**同样微调预算**（同 epochs 全模型微调）
 - **纯特征层归因**：迁移组仅注入 W_h_src，顶层 theta 随机（ablation——
-  review should-fix：原把 theta 也迁移，混淆归因）
+  初版将顶层一并迁移导致归因混淆；修正后仅 W_h 迁移，隔离特征层贡献）
 - 域 A/B = 关系特征空间（RelationalEnv 8D，⑤ 同构域对）
 - 3 独立训练 seeds + 布局分离 + 判定取最差
 
@@ -852,7 +852,7 @@ argmax 不变率 ≥95%，行为学表面无关性）。
 **seed 修复教训**（复检不一致暴露）：test_social main() 缺 `torch.manual_seed`
 ——AGI 内部 torch 网络初始化每次运行不同 → **初版"通过"是未 seed 运气**
 （sc5/sc6 复检不一致发现）。补 seed 后确定性运行，结果反转（v2 FAIL）。
-security low 再修：每 seed 双重置（np+torch）——seed 循环顺序无关（v3）。
+安全性审查再修：每 seed 双重置（np+torch）——seed 循环顺序无关（v3）。
 
 **结果**（v3 确定性，每 seed 独立重置，×3 seeds）：
 | seed | 双食物/冲突/存活 | 单食物/存活 |
