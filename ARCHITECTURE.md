@@ -202,8 +202,8 @@ agi/
 
 ## 跨域迁移（⑨ 生长/进化的路径）
 
-- **实现**（`core/cross_domain.py`）：`DomainAdapter`（观测/动作域抽象）+ `CapabilityExtractor`（底层通用特征）+ `CrossDomainTransfer`（底层注入 + 全模型微调 + 相似度）。
-- **诚实负结果**（`test_cross_domain.py`，回应 stacked-deck 批评）：初版 7 倍优势为堆牌（手工对角 W_h vs 削弱基线 + 只调顶层）已废弃；重做后域 A 真实训练源 W_h + 公平基线，迁移不占优（1 样本 0.97x、5 样本 0.86x）——骨架保留，待更合适任务对验证。
+- **④ 特征层迁移**（`core/cross_domain.py`）：`DomainAdapter` + `CapabilityExtractor` + `CrossDomainTransfer`（底层注入 + 全模型微调 + 相似度）。**诚实负结果**：初版 7 倍优势为堆牌已废弃；重做后迁移不占优（0.97x/0.86x）——骨架保留。
+- **⑤ 策略层迁移（触类旁通）**（`test_transfer_analogy.py`）：关系同构域对（迷宫墙→威胁场，共享 8D 关系特征空间），Q 表策略直接迁移——**零样本 17vs0、少样本 5 倍（21vs4）**。结论：迁移对象决定成败——关系结构跨域稳定，表面统计不跨域（与人类触类旁通机制一致）。
 
 ## 哲学底座（决定架构选择的十条原理）
 
