@@ -735,7 +735,12 @@ class AGI:
         # ─── 8. 行动 ───
         # 行动前记录位置（用于被动位移检测）
         pos_before_action = tuple(self.pos) if hasattr(self, 'pos') else None
-        
+
+        # 目标坚持 override（review blocking 修复：AGI 内部机制——
+        # 决策后执行前覆盖，agi.step 完整执行认知/代谢/死亡检测）
+        if getattr(self, '_goal_override', None) is not None:
+            action = self._goal_override
+
         if self.env:
             result = self.env.step(action)
             if isinstance(result, dict):
@@ -870,6 +875,7 @@ class AGI:
         
         # ─── 记录 ───
         self.last_action = action
+        self.last_surprise = surprise   # 目标坚持机制用（真实 surprise 通路）
         self.prev_pos = tuple(self.pos) if hasattr(self, 'pos') else None
         
         return {

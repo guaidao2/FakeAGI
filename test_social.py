@@ -177,6 +177,10 @@ class GoalPersistence:
         self.progress_seen = 0
         self.stall_ticks = 0
 
+    def _other_targets_same(self, env, pos):
+        """他者目标同一食物（env 冲突检测状态——位置比较恒 False 已废弃）"""
+        return env._conflict_open  # 环境已在双方同目标时置位
+
     def decide(self, env, who, pos, action, progress_now, surprise,
                energy, other_pos):
         """返回 (最终动作, 是否坚持)：
@@ -190,11 +194,11 @@ class GoalPersistence:
             # 放弃条件（重大预测误差）
             abandon = False
             if surprise > self.surprise_threshold:
-                abandon = True                # surprise 飙升
+                abandon = True                # surprise 飙升（真实通路）
             elif energy < self.energy_floor:
                 abandon = True                # 能量危机
-            elif other_pos is not None and tuple(other_pos) == tuple(pos):
-                abandon = True                # 他者抢占同一格
+            elif self._other_targets_same(env, pos):
+                abandon = True                # 他者目标同一食物（冲突）
             if progress_now > self.progress_seen:
                 self.progress_seen = progress_now
                 self.stall_ticks = 0
@@ -260,28 +264,20 @@ def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
                     deaths[who] = t
                 continue
             if goals is not None:
-                # 目标坚持机制：工作进度 = env 当前格进度
+                # 目标坚持（AGI 内部机制——main.py 决策后覆盖动作，
+                # agi.step 完整执行认知/代谢/死亡）
                 pos = list(env.pos_a if who == "a" else env.pos_b)
                 prog = env.gather_progress.get((who, tuple(pos)), 0) \
                     if env.gather_cost > 0 else 1.0
                 other_pos = env.pos_b if who == "a" else env.pos_a
-                # 预演：取 AGI 将执行的动作前先算 surprise/energy
-                # （main.step 内部计算——用上一次结果近似，见下）
-                # 直接调用 agi.step 获取结果后覆盖下一 tick 动作不可行——
-                # 采用"包装决策"：先让 AGI 决策，若在目标上则覆盖为停留
-                action = agi.last_action if hasattr(agi, 'last_action') else 1
-                # 计算坚持决策（用上一 tick 的 surprise/energy）
+                # 真实 surprise（main.py 存储）+ 真实能量
                 surp = getattr(agi, 'last_surprise', 0.0)
                 en = agi.body.energy
                 final_a, _ = goals[who].decide(
-                    env, who, pos, action, prog, surp, en, other_pos)
-                # 手动执行停留：环境步进 + 能量代谢（与 AGI step 等效的最小路径）
-                if final_a == 0 and tuple(pos) in [tuple(f) for f in env.foods]:
-                    r = env.step(who, 0, target_food=tuple(pos))
-                    agi.body.energy = max(0.0, agi.body.energy + r - 0.001)
-                    agi.last_action = 0
-                else:
-                    agi.step()
+                    env, who, pos, agi.last_action, prog, surp, en, other_pos)
+                agi._goal_override = final_a if final_a == 0 else None
+                agi.step()  # 完整 step（override 内部生效）
+                agi._goal_override = None
             else:
                 agi.step()
             if not agi.alive and deaths[who] is None:
