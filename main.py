@@ -412,18 +412,21 @@ class AGI:
 
             # ─── 情绪系统：生理+认知→情绪向量→探索率调制（默认关闭，零影响）───
             if getattr(self, '_emotion_enabled', False):
-                if self.emotion is None:
-                    from core.emotion import EmotionSystem
-                    self.emotion = EmotionSystem()
-                self.emotion.update(
-                    energy=self.body.energy, water=self.body.water,
-                    health=self.body.health, stress=self.body.stress,
-                    surprise=surprise, danger=danger_nearby, tick=self.tick)
-                emo = self.emotion.get_state()
-                # 恐惧→激进（探索率升），好奇→探索；仅调制非恒定探索模式
-                if getattr(self, '_const_explore', None) is None:
-                    exploration = self.emotion.modulate_action(exploration)
-                self.emotion_state = emo
+                try:
+                    if self.emotion is None:
+                        from core.emotion import EmotionSystem
+                        self.emotion = EmotionSystem()
+                    self.emotion.update(
+                        energy=self.body.energy, water=self.body.water,
+                        health=self.body.health, stress=self.body.stress,
+                        surprise=surprise, danger=danger_nearby, tick=self.tick)
+                    emo = self.emotion.get_state()
+                    # 恐惧→激进（探索率升），好奇→探索；仅调制非恒定探索模式
+                    if getattr(self, '_const_explore', None) is None:
+                        exploration = self.emotion.modulate_action(exploration)
+                    self.emotion_state = emo
+                except Exception:
+                    pass  # 容错：情绪异常不杀主循环（与文件内其他接入一致）
             
             # 元认知系统更新
             if self.metacognition is not None:

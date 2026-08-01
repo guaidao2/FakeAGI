@@ -99,8 +99,8 @@ class CrossDomainTransfer:
         w = dict(model_weights)
         if not samples:
             return w
-        xs = np.array([s[0] for s in samples], dtype=float)
-        ys = np.array([s[1] for s in samples], dtype=float)
+        xs = np.atleast_2d(np.array([s[0] for s in samples], dtype=float))
+        ys = np.atleast_2d(np.array([s[1] for s in samples], dtype=float))
         # 用迁移后的底层（W_h 若存在）做特征投影
         features = xs
         if "W_h" in w:
@@ -135,15 +135,6 @@ class CrossDomainTransfer:
 
     def similarity(self, w1: dict, w2: dict) -> float:
         """两模型权重相似度（余弦）——按公共层名对齐，维度不同的层跳过"""
-        def _vec(w):
-            parts = []
-            for k, v in w.items():
-                if k.startswith("_") or not hasattr(v, "shape"):
-                    continue
-                # 只取两模型都有的层（按调用方传入的公共键）
-                parts.append(np.asarray(v, dtype=float).flatten())
-            return np.concatenate(parts) if parts else np.zeros(1)
-
         common_keys = [k for k in w1 if k in w2 and not k.startswith("_")]
         parts1, parts2 = [], []
         for k in common_keys:
