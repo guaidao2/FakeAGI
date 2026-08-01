@@ -47,6 +47,8 @@ agi/
 │   ├── goals.py             # 目标层：目标vs过程分离（持久目标+落差+信息寻求）
 │   ├── info_seeking.py      # 信息寻求：定向扫掠（有记忆系统性搜索）
 │   ├── process_selector.py  # 过程选择：语言×目标层统一（可靠性估计+argmax）
+│   ├── other_agent.py       # 他者模型：真他者跟踪（意图分类+竞争回避）
+│   ├── emotion.py           # 情绪系统：显式情绪信号（恐惧/好奇/平静）+决策调制
 │   └── physics_intuition.py # 物理直觉：重力/碰撞/连续/动量/无瞬移先验（贝叶斯修正）
 │
 ├── cognition/               # 认知层 — 感知+推理+决策
@@ -176,7 +178,19 @@ agi/
 - **实现**（`core/process_selector.py`）：`ProcessEstimator`（可靠性在线估计：成功 +0.1/失败 -0.15，frozen 可冻结）+ `ProcessSelector`（argmax 预期收益 + 5% 试探防死锁）+ 真机会成本（问路 tick 不移动，intrinsic）。
 - **验收**（`test_process_selector.py`）：V1 失败→可靠性↓（0.5→0.05）/ V2 误差进模型 / V3 可逆（经试探）/ V4 可靠性驱动切换；N1-N4 负对照（N1 冻结仍问 200±0 vs N4 160±3、N2 全败少问 13±3 vs N3 179±35）。
 - **完整循环接入**（`test_process_integration.py` + `run_process_selection_study.py`）：冒烟 6 项全过；n=30 预注册判定全过（H1：N2 2±0 vs N3 390±149；N1：fail 环境冻结 125 vs 在线 2——在线更新必要；零影响护栏 ask=0）。
-- **边界诚实**：当前为标量可靠性评分（叠加态分支升级是 C2 后续）；reliability 为答对率代理；n=5（预注册 n=30）。
+- **C2 叠加态升级**（`SuperpositionEstimator`，`test_c2_superposition.py`）：多假设分支 + 贝叶斯坍缩 + 置信度地板——被教歪可逆（0.11→0.89 回升且低假设保留），4 项验证 + n=30 回归全过。
+- **边界诚实**：reliability 为答对率代理（叠加态已实现，落差消解率精确化待做）；n=30 预注册。
+
+## 他者模型（⑦ 自模型前置：社会智能）
+
+- **实现**（`core/other_agent.py`）：`OtherAgent`（competitor/cooperator/wanderer 策略）+ `OtherModel`（位置记忆 + 冲突计数 + 意图分类 + 竞争回避）。
+- **验证**（`test_other_agent.py`，5 项全过）：意图识别（竞争 10/10、合作 9/10）、竞争回避（距离增益 +0.8）、合作不回避（+0.0）、资源分配（竞争被抢 8.3 vs 合作 193.8）。
+- **与 hemin 区分**：hemin 是反事实影子（自己→不同动作），此为真实独立实体跟踪。
+
+## 情绪系统（情感是物理的）
+
+- **实现**（`core/emotion.py`）：生理（能量/健康/应激/危险）+ 认知（surprise）→ [fear, curiosity, calm] 情绪向量 + `modulate_action`（恐惧→激进探索）。
+- **验证**（`test_emotion.py`，5 项全过）：快饿死→fear 0.72、高应激→1.0、高 surprise→curiosity 0.73、稳态→calm 0.85、恐惧调制探索率 0.54 vs 0.12。
 
 ## 哲学底座（决定架构选择的十条原理）
 

@@ -206,7 +206,10 @@ session 结束（死亡/主动保存）
 - [ ] P3b：多实例并行（当前串行，可并行化）
 - [ ] P8c：句法/语法层 + 长文本生成
 - [x] **② 过程选择第一阶段**（`core/process_selector.py`）— 语言×目标层统一（可靠性估计+argmax，V1-V4+N1-N4 通过，n=5）
-- [x] **② 过程选择第二阶段**（接入完整主循环 + n=30 预注册）— 判定全过（H1 支持、N1 在线更新必要、零影响护栏）；C2 叠加态升级待做
+- [x] **② 过程选择第二阶段**（接入完整主循环 + n=30 预注册）— 判定全过（H1 支持、N1 在线更新必要、零影响护栏）
+- [x] **C2 叠加态升级**（`SuperpositionEstimator`）— 被教歪可逆（多假设+置信度地板），4 项验证 + n=30 回归全过
+- [x] **他者模型**（`core/other_agent.py`）— 真他者跟踪（意图分类+竞争回避），多智能体实验 5 项全过
+- [x] **情绪系统**（`core/emotion.py`）— 显式情绪信号（恐惧/好奇/平静）+ 决策调制，5 项验证全过
 
 验证：
 - `python test_persist.py` — checkpoint 往返 ✅
@@ -222,5 +225,8 @@ session 结束（死亡/主动保存）
 - `python test_process_selector.py` — 过程选择（② 第一阶段，V1-V4+N1-N4，n=5）
 - `python test_process_integration.py` — 过程选择接入冒烟（② 第二阶段，6 项）
 - `python run_process_selection_study.py` — 过程选择 n=30 预注册研究（判定全过）
+- `python test_c2_superposition.py` — C2 叠加态可靠性（被教歪可逆，4 项全过）
+- `python test_other_agent.py` — 他者模型（意图识别+竞争回避，5 项全过）
+- `python test_emotion.py` — 情绪系统（恐惧/好奇/平静，5 项全过）
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
