@@ -81,6 +81,7 @@ class SuperpositionEstimator:
     def __init__(self, name: str, prior: float = 0.5,
                  hypotheses=(0.9, 0.5, 0.1), frozen: bool = False):
         self.name = name
+        self.prior = prior
         h = np.asarray(hypotheses, dtype=float)
         if h.size == 0 or not np.all(np.isfinite(h)) or np.any(h < 0) or np.any(h > 1):
             h = np.array([0.9, 0.5, 0.1], dtype=float)  # 非法→默认假设
