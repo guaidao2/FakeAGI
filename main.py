@@ -101,6 +101,10 @@ class AGI:
         self.emotion_state = {}
         # 他者模型（真他者跟踪，默认关闭——区别于 hemin 影子自我 self.other_model）
         self.other_tracker = None
+        # ⑥ 迁移价值评估（默认关闭——接入点：环境切换决策）
+        self.transfer_selector = None
+        self.transfer_choice = None
+        self.transfer_feedback_tick = 0
         # P8a: 语言可信度（可学习先验——听词结果好则强化，差则坍缩）
         self._language_trust = 0.5  # 初始半信半疑（可被经验修正）
         self._language_used_tick = 0
@@ -117,7 +121,35 @@ class AGI:
         self.cognition = cognition
     
     def set_env(self, env):
+        """设置环境——⑥ 迁移价值评估接入点（默认关闭零影响）：
+        环境切换时，TransferSelector 决定保留 GameNN 权重（迁移）或重置（从头）；
+        迁移决策基于多假设贝叶斯可靠性（同构经验→迁移，异构→从头）。"""
+        old_env = self.env
         self.env = env
+        # ⑥ 默认关闭（_transfer_selector_enabled=True 时启用）
+        if not getattr(self, '_transfer_selector_enabled', False):
+            return
+        # 环境切换检测（首次设置不算切换）
+        if old_env is None:
+            return
+        try:
+            if self.transfer_selector is None:
+                from core.transfer_selector import TransferSelector
+                self.transfer_selector = TransferSelector(min_reliability=0.60)
+            # 新域 ID：环境类型名（迷宫/自由/共享等）
+            new_domain = type(env).__name__
+            choice = self.transfer_selector.choose(new_domain)
+            self.transfer_choice = choice
+            if choice == "scratch" and self.cognition is not None \
+                    and hasattr(self.cognition, 'gamenn'):
+                # 从头学：重置 GameNN Q 网络（丢弃旧域经验）
+                g = self.cognition.gamenn
+                g.q_nets = [type(g.q_nets[0])(g.state_dim, g.n_actions).to(g.device)
+                            for _ in range(g.n_strategies)]
+                g.strategy_weights = np.ones(g.n_strategies) / g.n_strategies
+                self.transfer_feedback_tick = self.tick  # 记录反馈起点
+        except Exception:
+            pass  # 容错：迁移评估异常不阻塞环境切换
     
     # ─── P0: Checkpoint 持久化（跨 session 身份连续性） ───
     def save(self, tag: str = "latest", path: str = None) -> str:
@@ -587,6 +619,21 @@ class AGI:
                     s = s[:sd]
                 reward = energy_delta * 10 + damage * (-5)
                 g.learn(reward, next_state=s)
+            # ─── ⑥ 迁移反馈：新环境跑够 500 tick 后，用 GameNN 置信度更新迁移可靠性 ───
+            if (getattr(self, '_transfer_selector_enabled', False)
+                    and self.transfer_selector is not None
+                    and self.transfer_choice is not None
+                    and self.tick - getattr(self, 'transfer_feedback_tick', 0) == 500
+                    and hasattr(self.cognition, 'gamenn')):
+                try:
+                    # 性能信号：GameNN 置信度（学到策略的程度）
+                    perf = self.cognition.gamenn.get_confidence()
+                    # 与"从头学基线"对比：迁移组置信度应更高（同构时）
+                    # 简化：用固定基线 0.15（低置信=从头水平）——真实对比需对照组
+                    self.transfer_selector.observe_feedback(perf, 0.15)
+                    self.transfer_feedback_tick = self.tick
+                except Exception:
+                    pass
             
             # P1: MoE 专家在线学习（被激活的专家学习自己的领域）
             if (self.moe is not None and self.moe_activations
