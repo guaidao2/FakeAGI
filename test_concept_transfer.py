@@ -113,9 +113,9 @@ class LinearQ:
         self.theta[a] += self.lr * (delta * obs - self.l2 * self.theta[a])
 
 
-def train_mixed(episodes_per=250, max_steps=40, seed=0):
+def train_mixed(episodes_per=250, max_steps=40, seed=0, l2=0.01):
     """跨两种表面（food+water）混合训练——抽象"可消耗物"概念"""
-    agent = LinearQ()
+    agent = LinearQ(l2=l2)
     for ep in range(episodes_per * 2):
         mode = "food" if ep % 2 == 0 else "water"
         env = ConceptEnv(size=6, mode=mode, seed=seed + ep)
@@ -157,8 +157,8 @@ def main():
     print("路线 B — 概念迁移实验 v2（跨表面抽象'可消耗物'）")
     print("=" * 60)
 
-    # A. 训练域可学（food+water 混合）
-    agent = train_mixed(episodes_per=250)
+    # A. 训练域可学（food+water 混合，L2=0.05——扫描选定：D 收敛且 B 保持）
+    agent = train_mixed(episodes_per=250, l2=0.05)
     a_food = eval_policy(agent, "food", trials=50)
     a_water = eval_policy(agent, "water", trials=50)
     r_food = eval_policy(LinearQ(), "food", trials=50, random_baseline=True)
