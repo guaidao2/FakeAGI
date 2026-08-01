@@ -152,44 +152,58 @@ def eval_policy(agent, mode, trials=50, max_steps=40, seed=500, train=False,
 
 
 def main():
-    np.random.seed(42)
     print("=" * 60)
     print("路线 B — 概念迁移实验 v2（跨表面抽象'可消耗物'）")
     print("=" * 60)
 
-    # A. 训练域可学（food+water 混合，L2=0.05——扫描选定：D 收敛且 B 保持）
-    agent = train_mixed(episodes_per=250, l2=0.05)
-    a_food = eval_policy(agent, "food", trials=50)
-    a_water = eval_policy(agent, "water", trials=50)
-    r_food = eval_policy(LinearQ(), "food", trials=50, random_baseline=True)
-    r_water = eval_policy(LinearQ(), "water", trials=50, random_baseline=True)
-    a_ok = a_food > r_food * 2 and a_water > r_water * 2
-    print(f"\n[A] 训练域可学: 食物 {a_food}/50 vs 随机 {r_food}/50, "
-          f"水源 {a_water}/50 vs 随机 {r_water}/50 "
-          f"(双域应>2x) {'OK' if a_ok else 'FAIL'}")
+    # 3 独立训练 seeds（review warn：D 单点脆弱——0.257 距 0.3 仅 0.043，
+    # 换全局 seed 可能翻越；A/B/D 全改为每 seed 独立训练+独立评估布局，
+    # 判定取最差——真正 3 seeds 鲁棒性）
+    seeds = (42, 7, 2026)
+    rows = []          # (seed, a_food, a_water, b_fruit, r_food, r_water, r_fruit, w_app)
+    agents = []
+    for s in seeds:
+        np.random.seed(s)                      # 独立训练探索流
+        agent = train_mixed(episodes_per=250, l2=0.05, seed=0)
+        agents.append(agent)
+        a_food = eval_policy(agent, "food", trials=50, seed=500 + s)
+        a_water = eval_policy(agent, "water", trials=50, seed=500 + s)
+        b_fruit = eval_policy(agent, "fruit", trials=50, seed=500 + s)
+        r_food = eval_policy(LinearQ(), "food", trials=50, seed=500 + s,
+                             random_baseline=True)
+        r_water = eval_policy(LinearQ(), "water", trials=50, seed=500 + s,
+                              random_baseline=True)
+        r_fruit = eval_policy(LinearQ(), "fruit", trials=50, seed=500 + s,
+                              random_baseline=True)
+        w_app = float(np.abs(agent.theta[:, 10]).max())
+        rows.append((s, a_food, a_water, b_fruit, r_food, r_water, r_fruit, w_app))
+
+    # A. 训练域可学（每 seed 双域 >2x 该 seed 随机基线）
+    a_oks = [r[1] > r[4] * 2 and r[2] > r[5] * 2 for r in rows]
+    a_ok = all(a_oks)
+    a_detail = ", ".join(f"seed{r[0]}: 食{r[1]}/{r[4]} 水{r[2]}/{r[5]}"
+                         for r in rows)
+    print(f"\n[A] 训练域可学(×3seeds): {a_detail} "
+          f"(每seed双域>2x) {'OK' if a_ok else 'FAIL'}")
 
     # B. 零样本概念迁移（果实——第三种表面，训练从未见过 0.8）
-    #    固定先验阈值（≥40/50=80%）而非相对 2x——防随机基线波动导致
-    #    结构性不可达/过松（review should-fix）
-    #    多 seed 重复（3 seeds）——最差 seed 也须过（防单 seed 运气）
-    b_results = []
-    for s in (42, 7, 2026):
-        np.random.seed(s)
-        # eval env seed 随 s 变化（500+s）——每 seed 用不同评估布局集，
-        # 三次 b_fruit 独立（security low：原固定 500 只抖动基线）
-        b_fruit = eval_policy(agent, "fruit", trials=50, seed=500 + s)
-        r_fruit = eval_policy(LinearQ(), "fruit", trials=50,
-                              seed=500 + s, random_baseline=True)
-        b_results.append((b_fruit, r_fruit))
-    b_min = min(x[0] for x in b_results)
+    #    固定先验阈值（≥40/50=80%）；3 独立训练 seeds 取最差
+    b_min = min(r[3] for r in rows)
     b_ok = b_min >= 40
-    detail = ", ".join(f"seed{s}: {x[0]}/{x[1]}" for s, x in
-                       zip((42, 7, 2026), b_results))
-    print(f"[B] 零样本概念迁移(×3seeds): {detail} "
+    b_detail = ", ".join(f"seed{r[0]}: {r[3]}/{r[6]}" for r in rows)
+    print(f"[B] 零样本概念迁移(×3seeds): {b_detail} "
           f"(最差≥40/50=80%) {'OK' if b_ok else 'FAIL'}")
 
-    # C. 少样本适配（fruit 30ep 迁移 vs 从头）
-    #    两者 eps 同衰减（0.3→0.05）——公平比较（review nit：原恒 0.3 高探索削弱比较）
+    # D. 外观权重（3 seeds 取最差——鲁棒性；<0.3=抽象成功忽略表面）
+    w_max = max(r[7] for r in rows)
+    d_ok = w_max < 0.3
+    w_detail = ", ".join(f"seed{r[0]}: {r[7]:.3f}" for r in rows)
+    print(f"[D] 外观权重(×3seeds): {w_detail} (最差<0.3) "
+          f"{'OK' if d_ok else 'FAIL'}")
+
+    # C. 少样本适配（fruit 30ep 迁移 vs 从头——用末 seed agent）
+    #    两者 eps 同衰减（0.3→0.05）——公平比较（review nit）
+    agent = agents[-1]
     def finetune(init_theta=None, seed0=100):
         ag = LinearQ()
         if init_theta is not None:
@@ -216,13 +230,6 @@ def main():
     print(f"[C] 少样本适配(30ep): 迁移 {c_mig}/50 vs 从头 {c_scratch}/50 "
           f"(应迁移多) {'OK' if c_ok else 'FAIL'}")
 
-    # D. 诚实报告：外观权重（|w_app| 小=抽象成功：忽略表面）
-    w_app = agent.theta[:, 10]  # 外观维度权重（5 动作）
-    w_app_norm = float(np.abs(w_app).max())
-    d_ok = w_app_norm < 0.3
-    print(f"[D] 外观权重 |w_app|={w_app_norm:.3f} "
-          f"(<0.3=抽象成功忽略表面) {'OK' if d_ok else 'FAIL'}")
-
     ok = b_ok  # 判定只看 B（A/C/D 如实记录）
     # 结论强度条件化：D 通过才声称"概念抽象（丢弃表面）"；
     # D 未过（外观权重未收敛）则降级"跨表面泛化（机制未明）"——review should-fix
@@ -232,10 +239,10 @@ def main():
     else:
         conclusion = "不成立"
     print(f"\n判定: {'OK 通过——第三种表面零样本迁移成立（' + conclusion + '）' if ok else 'FAIL'}")
-    print(f"  [诚实报告] A 食物 {a_food} vs {r_food}、水源 {a_water} vs {r_water}"
-          f"/ B {detail}"
+    print(f"  [诚实报告] A {a_detail}"
+          f"/ B {b_detail}"
           f"/ C 少样本 {c_mig} vs {c_scratch}"
-          f"/ D 外观权重 {w_app_norm:.3f}")
+          f"/ D {w_detail}")
     return 0 if ok else 1
 
 
