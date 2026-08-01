@@ -166,14 +166,18 @@ def main():
         np.random.seed(s)                      # 独立训练探索流
         agent = train_mixed(episodes_per=250, l2=0.05, seed=0)
         agents.append(agent)
-        a_food = eval_policy(agent, "food", trials=50, seed=500 + s)
-        a_water = eval_policy(agent, "water", trials=50, seed=500 + s)
-        b_fruit = eval_policy(agent, "fruit", trials=50, seed=500 + s)
-        r_food = eval_policy(LinearQ(), "food", trials=50, seed=500 + s,
+        # 评估布局 seed=500+s*1000——三组布局完全分离
+        # （security low：原 500+s 的 offset 35 是步长 7 整数倍，
+        #   s=42 与 s=7 布局重叠 45/50，"3 独立布局"打折）
+        es = 500 + s * 1000
+        a_food = eval_policy(agent, "food", trials=50, seed=es)
+        a_water = eval_policy(agent, "water", trials=50, seed=es)
+        b_fruit = eval_policy(agent, "fruit", trials=50, seed=es)
+        r_food = eval_policy(LinearQ(), "food", trials=50, seed=es,
                              random_baseline=True)
-        r_water = eval_policy(LinearQ(), "water", trials=50, seed=500 + s,
+        r_water = eval_policy(LinearQ(), "water", trials=50, seed=es,
                               random_baseline=True)
-        r_fruit = eval_policy(LinearQ(), "fruit", trials=50, seed=500 + s,
+        r_fruit = eval_policy(LinearQ(), "fruit", trials=50, seed=es,
                               random_baseline=True)
         w_app = float(np.abs(agent.theta[:, 10]).max())
         rows.append((s, a_food, a_water, b_fruit, r_food, r_water, r_fruit, w_app))
