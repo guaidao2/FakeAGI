@@ -19,6 +19,9 @@
   - 对比：双 AGI vs 单 AGI（同布局同食物数，基线）
   - 判定（v2，时间线记录在 main()）：人均食物不拖累（双人均 ≥ 单人均）
     + 社会行为（冲突事件>0）+ 存活不短（双平均存活 ≥ 单存活）
+  - 假说后半预注册判据（先于数据）：共存 = (a) 成本>0 配置双 AGI
+    最短存活 > 饿死线 700（有效——AGI 能完成工作）+ (b) min 存活随
+    成本升高不下降 + (c) 冲突率（conflicts/存活 tick）降幅 >50%
   - 3 seeds 独立 + 判定取最差
 """
 import sys, os
@@ -256,6 +259,7 @@ def main():
         ("丰富-极高", dict(n_food=8, gather_cost=60)),
     ]
     summary = []
+    rows_by_label = {}
     all_ok = True
     for label, cfg in configs:
         rows = []
@@ -268,6 +272,7 @@ def main():
             print(f"  [{label}] seed{s}: 双食物={soc['food']} 冲突={soc['conflicts']} "
                   f"存活={soc['survival']:.0f} 存活差={soc['surv_gap']:.0f} "
                   f"| 单食物={single['food']} 存活={single['survival']:.0f}")
+        rows_by_label[label] = rows
         conf_sum = sum(r[1]["conflicts"] for r in rows)
         surv_min = min(r[1]["survival"] for r in rows)
         single_surv_min = min(r[2]["survival"] for r in rows)
@@ -286,26 +291,51 @@ def main():
         print(f"  {label}: 冲突={conf}（×3seeds）双总食物={food} "
               f"双最差存活={surv:.0f} 单最差存活={single:.0f} 存活差均值={gap:.0f}")
 
-    # 假说后半（补验）：丰富 + 成本升高 → 冲突下降 / 共存（存活差小）
-    print("\n=== 假说后半：丰富-成本梯度 ===")
-    rich_cfgs = [x for x in summary if x[0].startswith("丰富")]
+    # 假说后半（补验）：丰富 + 成本升高 → 共存
+    # 共存判据（预注册，先于数据）：
+    #   (a) 有效性：成本>0 配置双 AGI 最短存活 > 饿死线 700
+    #       （双双饿死=AGI 无法完成工作，测不到社会行为——配置无效）
+    #   (b) min 存活（双中最短者，×3seeds 最差）随成本升高不下降
+    #   (c) 冲突率（conflicts/双平均存活 tick，×3seeds 合计）下降 >50%
+    print("\n=== 假说后半：丰富-成本梯度（预注册判据）===")
     costs = [0, 15, 30, 60]
+    cost_label = {0: "丰富-易得", 15: "丰富-难获", 30: "丰富-极难",
+                  60: "丰富-极高"}
     conf_by_cost = {}
-    gap_by_cost = {}
-    for label, conf, surv, single, food, gap in rich_cfgs:
-        cost = {"丰富-易得": 0, "丰富-难获": 15, "丰富-极难": 30,
-                "丰富-极高": 60}[label]
-        conf_by_cost[cost] = conf
-        gap_by_cost[cost] = gap
-    confs = [conf_by_cost.get(c, 0) for c in costs]
-    gaps = [gap_by_cost.get(c, 0) for c in costs]
-    print(f"  成本 0/15/30/60 → 冲突 {confs}、存活差 {gaps}")
-    # 共存判据：成本 60 冲突显著低于成本 0（下降 >50%）且存活差缩小
-    conflict_drop = (confs[0] - confs[3]) / max(1, confs[0])
-    gap_drop = (gaps[0] - gaps[3]) / max(1, gaps[0])
-    co_exist = conflict_drop > 0.5 and gap_drop > 0.3
-    print(f"  冲突降幅 {conflict_drop*100:.0f}%、存活差降幅 {gap_drop*100:.0f}%")
-    print(f"  共存涌现{'OK' if co_exist else '未证'}（冲突-50%且存活差-30% 为判据）")
+    min_surv_by_cost = {}
+    rate_by_cost = {}
+    for c in costs:
+        label = cost_label[c]
+        rows = rows_by_label[label]
+        conf_by_cost[c] = sum(r[1]["conflicts"] for r in rows)
+        # min 存活：每 seed 取双中最短存活，再取 ×3seeds 最差
+        per_seed_min = []
+        for _, soc, _ in rows:
+            da = soc["deaths"]["a"] if soc["deaths"]["a"] is not None else 3000
+            db = soc["deaths"]["b"] if soc["deaths"]["b"] is not None else 3000
+            per_seed_min.append(min(da, db))
+        min_surv_by_cost[c] = min(per_seed_min)
+        # 冲突率：conflicts / 双总存活 tick（每 seed 存活和）
+        total_alive = sum(
+            (soc["deaths"]["a"] if soc["deaths"]["a"] is not None else 3000)
+            + (soc["deaths"]["b"] if soc["deaths"]["b"] is not None else 3000)
+            for _, soc, _ in rows)
+        rate_by_cost[c] = conf_by_cost[c] / max(1, total_alive)
+    confs = [conf_by_cost[c] for c in costs]
+    mins = [min_surv_by_cost[c] for c in costs]
+    rates = [rate_by_cost[c] for c in costs]
+    valid = all(m > 700 for m in mins[1:])   # 判据 (a)
+    min_ok = mins[3] >= mins[0]              # 判据 (b)
+    rate_drop = (rates[0] - rates[3]) / max(1e-9, rates[0])  # 判据 (c)
+    co_exist = valid and min_ok and rate_drop > 0.5
+    if not valid:
+        print("  [!!] 有效性 FAIL：成本>0 配置双 AGI 最短存活 ≤700"
+              "（双双饿死）——AGI 无法完成工作，假说后半无法检验")
+    print(f"  成本 0/15/30/60 → 冲突 {confs}、min存活 {mins}、冲突率 "
+          f"{[f'{r:.3f}' for r in rates]}")
+    print(f"  有效性{'OK' if valid else 'FAIL'}、min存活不降"
+          f"{'OK' if min_ok else 'FAIL'}、冲突率降幅 {rate_drop*100:.0f}%")
+    print(f"  共存涌现{'OK' if co_exist else '未证（预注册判据）'}")
 
     # ablation 对照：他者模型开关（review blocking——冲突归因）
     print("\n=== 他者模型 ablation（稀缺-难获配置）===")
