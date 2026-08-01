@@ -30,7 +30,7 @@ from cognition import CognitionPipeline
 
 
 class World2:
-    """双 AGI 共享世界：8x8，食物 3 个（吃后随机重放）"""
+    """双 AGI 共享世界：8x8，食物 4 个（吃后随机重放）"""
     def __init__(self, seed=0):
         self.rng = np.random.RandomState(seed)
         self.size = 8
