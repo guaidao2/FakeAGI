@@ -792,8 +792,11 @@ argmax 不变率 ≥95%，行为学表面无关性）。
 **修复暴露的连带缺口**（如实记录）：
 1. **持久化缺口**：checkpoint 未保存 `is_sleeping` → 睡眠中保存恢复后"醒来"
    行为分叉（test_persist 暴露）→ 补保存/恢复 + 测试含睡眠断言
-2. **weights_only 兼容**：旧档含非标准对象加载失败 → 仅对
-   "Weights only load failed"类异常回退（门控防投毒扩面），其余失败
+2. **weights_only 安全加固**（security MEDIUM 修复）：回退改**显式 opt-in**
+   （`allow_fallback=False` 默认拒绝——投毒 checkpoint 无法经字符串门控
+   达 pickle RCE 面）+ **save 侧 `_sanitize` 根治**（numpy array→list/
+   标量→原生/int 保持——新档必然 weights_only 兼容，回退路径几乎不再
+   需要）；test_persist 含睡眠断言通过
 
 **科学意义**：集成短板闭环——E14 从"暴露问题"到"问题已解决"；
 修复过程暴露并修复 2 个隐藏缺口（持久化完整性、加载安全边界）。
