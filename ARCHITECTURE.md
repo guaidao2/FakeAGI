@@ -49,6 +49,7 @@ agi/
 │   ├── process_selector.py  # 过程选择：语言×目标层统一（可靠性估计+argmax）
 │   ├── other_agent.py       # 他者模型：真他者跟踪（意图分类+竞争回避）
 │   ├── emotion.py           # 情绪系统：显式情绪信号（恐惧/好奇/平静）+决策调制
+│   ├── cross_domain.py      # 跨域迁移：底层能力提取+少样本微调（域抽象）
 │   └── physics_intuition.py # 物理直觉：重力/碰撞/连续/动量/无瞬移先验（贝叶斯修正）
 │
 ├── cognition/               # 认知层 — 感知+推理+决策
@@ -191,6 +192,18 @@ agi/
 
 - **实现**（`core/emotion.py`）：生理（能量/健康/应激/危险）+ 认知（surprise）→ [fear, curiosity, calm] 情绪向量 + `modulate_action`（恐惧→激进探索）。
 - **验证**（`test_emotion.py`，5 项全过）：快饿死→fear 0.72、高应激→1.0、高 surprise→curiosity 0.73、稳态→calm 0.85、恐惧调制探索率 0.54 vs 0.12。
+- **主循环接入**：`_emotion_enabled` 开关（默认关），surprise 后调制探索率（接入验证 4 项全过）。
+
+## 句法层（P8c：语言词级→句级）
+
+- **实现**（`cognition/language/syntax.py`）：`BigramTracker`（相邻词对频率）+ `PhraseBuilder`（按经验顺序组词）+ `integrate_with_select`（select_words 多词 + 句法排序）。
+- **可学习语法**：词序从经验统计来，经验翻转输出跟着翻（非硬编码规则）。
+- **验证**（`test_syntax.py`，4 项全过）：词序学习 0.83、短语 [food,east]、顺序反转、select_words 集成。
+
+## 跨域迁移（⑨ 生长/进化的路径）
+
+- **实现**（`core/cross_domain.py`）：`DomainAdapter`（观测/动作域抽象）+ `CapabilityExtractor`（底层通用特征）+ `CrossDomainTransfer`（底层注入 + 少样本微调 + 相似度）。
+- **验证**（`test_cross_domain.py`，4 项全过）：零样本迁移、少样本微调迁移误差 2.17 vs 从头 14.80（7 倍）、迁移显著更快、相似度 -0.033→1.000。
 
 ## 哲学底座（决定架构选择的十条原理）
 

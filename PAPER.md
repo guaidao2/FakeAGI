@@ -543,6 +543,35 @@ def step():
 （他者存在时的策略调整）、③ 情感物理化（情绪=可测信号+决策调制）。
 均以显式实验验证（非默认假设），默认关闭零影响旧实验。
 
+### 4.9 能力落地（③ 主循环接入 / P8c 句法 / ④ 跨域迁移）
+
+**③ 情绪 + 他者接入主循环**（`main.py` + `test_integration_emotion_other.py`）：
+- 情绪系统接入：surprise 后调制探索率（恐惧→激进），默认 `_emotion_enabled=False`
+- 他者模型接入：委员会决策后竞争回避覆盖（共享环境 `get_other_pos`），
+  默认关闭，无他者环境静默跳过（零影响护栏）
+- 接入验证 4 项全过：A 默认关闭空态 / B 恐惧态 fear=1.00 vs 平静 0.02 /
+  C intent=competitor 识别 / D 无他者环境不报错
+- 命名区分：`other_tracker`（真他者）vs `other_model`（hemin 影子自我）
+
+**P8c 句法层**（`cognition/language/syntax.py` + `test_syntax.py`）：
+- 实现：`BigramTracker`（相邻词对频率学习）+ `PhraseBuilder`（按经验顺序组词）
+  + `integrate_with_select`（select_words 多词输出 + 句法排序）
+- **语法从经验来，非硬编码**——词序统计决定短语顺序，经验翻转输出跟着翻
+- 验证 4 项全过：A 词序学习 0.83 / B 短语 [food, east] / C 顺序反转（可学习语法）/
+  D 与 select_words 集成（['water','west']）
+
+**④ 跨域迁移**（`core/cross_domain.py` + `test_cross_domain.py`）：
+- 实现：`DomainAdapter`（观测/动作域抽象）+ `CapabilityExtractor`（底层通用
+  特征提取）+ `CrossDomainTransfer`（底层注入 + 少样本微调 + 相似度）
+- 验证 4 项全过：A 零样本迁移 / B **少样本微调迁移误差 2.17 vs 从头 14.80
+  （7 倍优势）**/ C 迁移显著更快 / D 相似度 -0.033→1.000
+- **能力复用证据**：有结构的源域时序特征（对角 W_h + tanh 投影）迁移到
+  非线性目标域后，5 样本微调泛化误差降 85%——不是每域重学
+
+**科学意义**：三大能力从"独立验证"走向"实际行为 + 跨域复用"——
+情绪/他者真正影响"识"的决策（可开关），语言从词级到句级（可学习语法），
+能力跨域迁移（7 倍学习优势）。
+
 ---
 
 ## 5. 讨论

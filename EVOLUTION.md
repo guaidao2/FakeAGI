@@ -204,7 +204,9 @@ session 结束（死亡/主动保存）
 - [x] **P8a：语言生存压力**（`test_language_survival.py`）— 食物方向隐藏环境，可信度驱动语言使用（强化/坍缩/试探），对照组饿死 vs 语言组存活 4.3 倍
 - [x] **P8b：语言即行为**（`test_language_intent.py`）— 需求驱动主动说话（`AGI.speak()`）+ 意图优先仲裁（指令加成压过反射），会说满存活 vs 不会说饿死（L4 意图）
 - [ ] P3b：多实例并行（当前串行，可并行化）
-- [ ] P8c：句法/语法层 + 长文本生成
+- [x] **P8c 句法层**（`cognition/language/syntax.py`）— 词序学习+短语组合（可学习语法），4 项验证全过
+- [x] **③ 情绪+他者接入主循环**（`main.py`）— 默认关闭开关，接入验证 4 项全过（恐惧调制/竞争回避）
+- [x] **④ 跨域迁移**（`core/cross_domain.py`）— 底层能力提取+少样本微调，验证 4 项全过（迁移误差 2.17 vs 从头 14.80，7 倍）
 - [x] **② 过程选择第一阶段**（`core/process_selector.py`）— 语言×目标层统一（可靠性估计+argmax，V1-V4+N1-N4 通过，n=5）
 - [x] **② 过程选择第二阶段**（接入完整主循环 + n=30 预注册）— 判定全过（H1 支持、N1 在线更新必要、零影响护栏）
 - [x] **C2 叠加态升级**（`SuperpositionEstimator`）— 被教歪可逆（多假设+置信度地板），4 项验证 + n=30 回归全过
@@ -229,5 +231,8 @@ session 结束（死亡/主动保存）
 - `python test_c2_superposition.py` — C2 叠加态可靠性（被教歪可逆，4 项全过）
 - `python test_other_agent.py` — 他者模型（意图识别+竞争回避，5 项全过）
 - `python test_emotion.py` — 情绪系统（恐惧/好奇/平静，5 项全过）
+- `python test_integration_emotion_other.py` — ③ 接入验证（情绪+他者进主循环，4 项全过）
+- `python test_syntax.py` — P8c 句法层（词序学习+短语组合，4 项全过）
+- `python test_cross_domain.py` — ④ 跨域迁移（迁移误差 2.17 vs 从头 14.80）
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
