@@ -196,14 +196,17 @@ def run_rl(unlock_bonus=False, max_ticks=3000, seed=0):
             "alive": not done, "survived": t}
 
 
-def run_group(name, fn, seeds=3):
+def run_group(name, fn, seeds=30):
+    """n=30（E13 扩大——原 n=3 弱支持升级为统计判定）"""
     print(f"\n── {name} ──", flush=True)
     results = []
     for s in range(seeds):
+        np.random.seed(1000 + s)  # 每 seed 独立重置（防全局流污染）
         r = fn(seed=s)
         results.append(r)
-        print(f"  seed={s}: 成功t={r['success_at']} 食物={r['eaten']} "
-              f"存活={r['survived']} alive={r['alive']}", flush=True)
+        if s < 5 or s == seeds - 1:  # 打印前 5 + 末 seed 明细
+            print(f"  seed={s}: 成功t={r['success_at']} 食物={r['eaten']} "
+                  f"存活={r['survived']} alive={r['alive']}", flush=True)
     succ = sum(1 for r in results if r["success_at"] is not None)
     food = np.mean([r["eaten"] for r in results])
     print(f"  成功率 {succ}/{seeds}, 食物均值 {food:.1f}", flush=True)
@@ -236,13 +239,18 @@ def test():
     print(f"  G4 去反射+目标: 存活 {np.mean([r['survived'] for r in g4['results']]):.0f} "
           f"食物 {g4['food']:.1f}", flush=True)
 
-    # 判定：① 扫掠机制 vs 随机探索（G6 vs G5）；② 落差门控增量（G6 vs G6b）
-    sweep_better = g6["succ"] >= 2 and g6["food"] > g5["food"] * 1.5
+    # 判定（n=30 统计）：① 扫掠机制 vs 随机探索（G6 vs G5）
+    #   ≥60% 成功率 且 食物均值 > G5×1.5（Wilcoxon 简化——均值差）
+    # ② 落差门控增量（G6 vs G6b）：食物均值 > ×1.2
+    sweep_better = g6["succ"] >= 18 and g6["food"] > g5["food"] * 1.5
     gap_better = g6["food"] > g6b["food"] * 1.2
     v1 = "扫掠优于随机探索" if sweep_better else "扫掠未优于随机"
     v2 = "落差门控有增量" if gap_better else "落差门控无增量（恒开即可）"
-    print(f"\n  判定(n=3): ① {v1}; ② {v2}", flush=True)
-    print(f"  说明: 配置有效性证据（弱），公理④ 精炼需进一步消融", flush=True)
+    print(f"\n  判定(n=30): ① {v1}（G6 {g6['succ']}/30 vs G5 {g5['succ']}/30, "
+          f"食物 {g6['food']:.1f} vs {g5['food']:.1f}）", flush=True)
+    print(f"  判定(n=30): ② {v2}（G6 食物 {g6['food']:.1f} vs "
+          f"G6b {g6b['food']:.1f}）", flush=True)
+    print(f"  说明: n=30 统计判定（原 n=3 弱支持升级）", flush=True)
     return 0 if (sweep_better and gap_better) else 1
 
 
