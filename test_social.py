@@ -13,7 +13,7 @@
   Q3. 总食物获取 vs 单 AGI 基线——多智能体是提升还是拖累？
 
 设计（预注册）：
-  - World2：8x8 共享世界，食物 3 个（稀缺），2 个 AGI 交替 step
+  - World2：8x8 共享世界，食物 4 个（稀缺但可存活），2 个 AGI 交替 step
   - 观测：各自 4D 基础观测 + 他者位置（他者模型消费）
   - 指标：存活/食物/冲突事件（去重）/平均存活
   - 对比：双 AGI vs 单 AGI（同布局同食物数，基线）
@@ -206,8 +206,8 @@ def main():
         single = run_single(seed=s)
         rows.append((s, soc, single))
         print(f"  seed{s}: 双AGI食物={soc['food']} 冲突={soc['conflicts']} "
-              f"存活={soc['survival']:.0f} | 单AGI食物={single['food']} "
-              f"存活={single['survival']:.0f}")
+              f"存活a/b={soc['deaths']} 平均{soc['survival']:.0f} "
+              f"| 单AGI食物={single['food']} 存活={single['survival']:.0f}")
     # 判定（v2 修正，记录时间线：v1"全程存活+总食物"不可达且不公平——
     # 单 AGI 也死（存活 910-2150），双 AGI 6000 步 vs 单 3000 步使总食物
     # 天然 2 倍偏向。v2 判据：人均食物不拖累（双人均 ≥ 单人均——公平）
@@ -228,8 +228,8 @@ def main():
           f"社会行为{'OK' if any_conflict else 'FAIL'} "
           f"寿命不短{'OK' if not_shorter else 'FAIL'} "
           f"({surv_min:.0f} vs {single_surv_min:.0f})")
-    verdict = ("通过——双 AGI 人均效率不拖累+社会行为（竞争冲突）出现"
-               "（社会智能基础，效应如实记录）" if ok
+    verdict = ("通过——人均效率不拖累+竞争冲突事件出现"
+               "（观察性描述，n=3 无统计推断）" if ok
                else "未过——如实记录")
     print(f"  {verdict}")
     return 0 if ok else 1
