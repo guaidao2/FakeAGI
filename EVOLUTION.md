@@ -209,7 +209,7 @@ session 结束（死亡/主动保存）
 - [x] **P8c 句法层**（`cognition/language/syntax.py`）— 词序学习+短语组合（可学习语法），4 项验证全过
 - [x] **③ 情绪+他者接入主循环**（`main.py`）— 默认关闭开关，接入验证 4 项全过（恐惧调制/竞争回避）
 - [x] **④ 跨域迁移**（`core/cross_domain.py`）— 骨架（域抽象+底层提取+全模型微调）已建；**诚实负结果**（迁移不占优 0.97x/0.86x——初版 7 倍为堆牌已废弃）
-- [x] **⑤ 触类旁通**（`test_transfer_analogy.py`）— 策略层迁移（关系同构域对）：零样本 17vs0 + 少样本 5 倍（21vs4），**策略层迁移成立**（回应④负结果）
+- [x] **⑤ 触类旁通**（`test_transfer_analogy.py`）— 策略层迁移（关系同构域对）：**少样本迁移成立（37vs20）**；零样本不成立（初版"17vs0"为停留基线伪胜利，复审修正）
 - [x] **② 过程选择第一阶段**（`core/process_selector.py`）— 语言×目标层统一（可靠性估计+argmax，V1-V4+N1-N4 通过，n=5）
 - [x] **② 过程选择第二阶段**（接入完整主循环 + n=30 预注册）— 判定全过（H1 支持、N1 在线更新必要、零影响护栏）
 - [x] **C2 叠加态升级**（`SuperpositionEstimator`）— 被教歪可逆（多假设+置信度地板），4 项验证 + n=30 回归全过
@@ -238,6 +238,6 @@ session 结束（死亡/主动保存）
 - `python test_integration_emotion_other.py` — ③ 接入验证（情绪+他者进主循环，4 项全过）
 - `python test_syntax.py` — P8c 句法层（词序学习+短语组合，4 项全过）
 - `python test_cross_domain.py` — ④ 跨域迁移（诚实负结果：迁移 0.97x/0.86x 不占优）
-- `python test_transfer_analogy.py` — ⑤ 触类旁通（策略层迁移：零样本 17vs0、少样本 21vs4）
+- `python test_transfer_analogy.py` — ⑤ 触类旁通（策略层迁移：少样本 37vs20 成立，零样本不成立）
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
