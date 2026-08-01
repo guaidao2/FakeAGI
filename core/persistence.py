@@ -113,6 +113,15 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
     except Exception:
         pass
 
+    # 5b. ⑥ 迁移评估状态（防 save→load 后同域误判为跨域）
+    try:
+        data["transfer"] = {
+            "last_domain": getattr(agi, "_last_domain", None),
+            "choice": agi.transfer_choice,
+        }
+    except Exception:
+        pass
+
     # 6. 身体状态
     try:
         data["body"] = {
@@ -278,6 +287,17 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             agi.strategy_mgr.current = s["current"]
             agi.strategy_mgr.strategy_scores = s["scores"]
             agi.strategy_mgr.switch_count = s["switch_count"]
+        except Exception:
+            pass
+
+    # 5b. ⑥ 迁移评估状态恢复
+    if "transfer" in data:
+        try:
+            t = data["transfer"]
+            if t.get("last_domain") is not None:
+                agi._last_domain = t["last_domain"]
+            if t.get("choice") is not None:
+                agi.transfer_choice = t["choice"]
         except Exception:
             pass
 

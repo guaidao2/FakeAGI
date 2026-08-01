@@ -147,13 +147,16 @@ class AGI:
             if choice == "scratch" and self.cognition is not None \
                     and hasattr(self.cognition, 'gamenn'):
                 # 从头学：重置 GameNN（丢弃旧域经验）
-                # 必须同步重建 optimizers（否则 optimizer 仍绑定旧参数，无法学习）
+                # 原子化：先构造全部新对象，全部成功后再替换（防半重置）
                 g = self.cognition.gamenn
-                g.q_nets = [type(g.q_nets[0])(g.state_dim, g.n_actions).to(g.device)
-                            for _ in range(g.n_strategies)]
                 import torch  # 局部导入（main.py 顶层无 torch）
-                g.optimizers = [torch.optim.AdamW(q.parameters(), lr=g.lr)
-                                for q in g.q_nets]
+                new_nets = [type(g.q_nets[0])(g.state_dim, g.n_actions).to(g.device)
+                            for _ in range(g.n_strategies)]
+                new_opts = [torch.optim.AdamW(q.parameters(), lr=g.lr)
+                            for q in new_nets]
+                # 全部构造成功 → 原子替换
+                g.q_nets = new_nets
+                g.optimizers = new_opts
                 g.strategy_weights = np.ones(g.n_strategies) / g.n_strategies
                 # 清状态缓存（防旧域污染新域置信度/策略演化）
                 if hasattr(g, 'strategy_update_counts'):
@@ -163,7 +166,8 @@ class AGI:
                 if hasattr(g, 'strategy_counts'):
                     g.strategy_counts = [0] * g.n_strategies
                 if hasattr(g, 'game_matrix'):
-                    g.game_matrix = np.zeros((g.n_strategies, g.n_actions))
+                    # 形状对齐 GameNN 定义 (n_strategies, n_strategies)
+                    g.game_matrix = np.zeros((g.n_strategies, g.n_strategies))
                 self.transfer_feedback_tick = self.tick  # 记录反馈起点
         except Exception as e:
             # 容错：迁移评估异常不阻塞环境切换（记录便于诊断）
@@ -660,8 +664,13 @@ class AGI:
                     and self.tick % 3000 == 0
                     and getattr(self, '_transfer_probe_tick', -9999) < self.tick - 1000):
                 try:
-                    self.transfer_selector.choose("probe_" + str(self.tick))
-                    self._transfer_probe_tick = self.tick
+                    # 试探：用当前可靠性再选一次（若已回升则选 transfer），
+                    # 并记录试探——即使仍 scratch 也更新 probe_tick（防每 3000 重复）
+                    probe_choice = self.transfer_selector.choose(
+                        "probe_" + str(self.tick))
+                    if probe_choice == "transfer":
+                        self.transfer_choice = "transfer"
+                        self._transfer_probe_tick = self.tick
                 except Exception:
                     pass
             
