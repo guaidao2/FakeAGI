@@ -202,8 +202,8 @@ agi/
 
 ## 跨域迁移（⑨ 生长/进化的路径）
 
-- **实现**（`core/cross_domain.py`）：`DomainAdapter`（观测/动作域抽象）+ `CapabilityExtractor`（底层通用特征）+ `CrossDomainTransfer`（底层注入 + 少样本微调 + 相似度）。
-- **验证**（`test_cross_domain.py`，4 项全过）：零样本迁移、少样本微调迁移误差 2.17 vs 从头 14.80（7 倍）、迁移显著更快、相似度 -0.033→1.000。
+- **实现**（`core/cross_domain.py`）：`DomainAdapter`（观测/动作域抽象）+ `CapabilityExtractor`（底层通用特征）+ `CrossDomainTransfer`（底层注入 + 全模型微调 + 相似度）。
+- **诚实负结果**（`test_cross_domain.py`，回应 stacked-deck 批评）：初版 7 倍优势为堆牌（手工对角 W_h vs 削弱基线 + 只调顶层）已废弃；重做后域 A 真实训练源 W_h + 公平基线，迁移不占优（1 样本 0.97x、5 样本 0.86x）——骨架保留，待更合适任务对验证。
 
 ## 哲学底座（决定架构选择的十条原理）
 
