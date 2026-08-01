@@ -135,7 +135,8 @@ def make_agi(full_mode=True):
     return agi
 
 
-def run_episode(full_mode=True, max_ticks=10000, seed=0, env_seed=1):
+def run_episode(full_mode=True, max_ticks=10000, env_seed=1):
+    """跑一个 episode（AGI 随机由 main() 全局 seed 控制；env 由 env_seed 独立固定）"""
     agi = make_agi(full_mode)
     env = SharedWorld(seed=env_seed, language=full_mode, other=full_mode)
     agi.set_env(env)
@@ -146,7 +147,7 @@ def run_episode(full_mode=True, max_ticks=10000, seed=0, env_seed=1):
         "module_activations": {"emotion": 0, "language": 0, "other": 0,
                                 "sleep": 0, "concept": 0},
     }
-    last_lang_use_tick = -9999
+    last_lang_use_tick = 0  # 与 _language_used_tick 初始值一致（防首 tick 假计数）
     for t in range(max_ticks):
         env.words = env.get_language()
         if env.words:
@@ -186,13 +187,13 @@ def main():
     N_SEEDS = 5
     full_foods, base_foods = [], []
     for s in range(N_SEEDS):
-        full = run_episode(full_mode=True, seed=0, env_seed=s)
-        base = run_episode(full_mode=False, seed=0, env_seed=s)
+        full = run_episode(full_mode=True, env_seed=s)
+        base = run_episode(full_mode=False, env_seed=s)
         full_foods.append(full["food"])
         base_foods.append(base["food"])
     # 末次详情用于 A-D 判定
-    full = run_episode(full_mode=True, seed=0, env_seed=N_SEEDS)
-    base = run_episode(full_mode=False, seed=0, env_seed=N_SEEDS)
+    full = run_episode(full_mode=True, env_seed=N_SEEDS)
+    base = run_episode(full_mode=False, env_seed=N_SEEDS)
 
     mean_f, std_f = np.mean(full_foods), np.std(full_foods)
     mean_b, std_b = np.mean(base_foods), np.std(base_foods)
@@ -226,8 +227,7 @@ def main():
           f"(应>0——非仅广播) {'OK' if d_ok else 'FAIL'}")
 
     # E. 存活涌现（多 seeds：全模块均值 ≥ 对照均值——协同不拖累）
-    #    秩和检验（Mann-Whitney U 简化：全模块最大值 ≥ 对照中位数即可）
-    e_ok = mean_f >= mean_b  # 均值不显著低于对照
+    e_ok = mean_f >= mean_b  # 方向保守：不要求显著，只要求不拖累
     print(f"[E] 存活涌现(×{N_SEEDS}): 全模块 {mean_f:.1f}±{std_f:.1f} "
           f"vs 对照 {mean_b:.1f}±{std_b:.1f} (应≥) {'OK' if e_ok else 'FAIL'}")
 
