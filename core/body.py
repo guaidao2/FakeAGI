@@ -85,7 +85,11 @@ class BodyModel:
             # 睡眠时微恢复
             self.integrity = min(1.0, self.integrity + self.recovery_rate * 0.5)
         else:
-            self.fatigue = min(1.0, self.fatigue + 0.001 * dt)
+            # 集成短板修复：疲劳积累 0.0015→0.005/tick（清醒）——
+            # 根因链：E14 食物稀缺→agent 存活仅 300-500 tick 即死亡，
+            # 原 0.0015 在存活期内无法累积到 0.7 阈值→睡眠永不触发。
+            # 0.005/tick → 140 tick 达 0.7，存活期内可触发。
+            self.fatigue = min(1.0, self.fatigue + 0.005 * dt)
             self.sleep_hours += 1
         
         # 应激累积：关键变量偏离稳态时应激上升

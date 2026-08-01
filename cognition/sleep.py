@@ -19,7 +19,10 @@ class SleepCycle:
         self.dream_log = []
     
     def should_sleep(self, fatigue: float, circadian: float, energy: float = 1.0) -> bool:
-        return fatigue > 0.7 and energy > 0.5  # 能量低时不睡，优先觅食
+        # 集成短板修复（E14 睡眠 0 次触发根因）：能量条件 0.5→0.3——
+        # 原 0.5 在食物稀缺环境（能量常<0.5）下条件永假，睡眠永不触发。
+        # 生物学：疲劳 0.7 是"困"，能量>0.3 即可睡（<0.3 仍优先觅食）。
+        return fatigue > 0.7 and energy > 0.3
     
     def should_wake(self, fatigue: float, energy: float = 0) -> bool:
         return (fatigue < 0.2 and self.sleep_duration > 20) or (energy > 1.5 and fatigue < 0.5)

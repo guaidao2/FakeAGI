@@ -130,6 +130,10 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
             "integrity": float(agi.body.integrity),
             "fatigue": float(agi.body.fatigue),
             "stress": float(agi.body.stress),
+            # 睡眠状态完整持久化（缺口：原缺 is_sleeping——睡眠触发后
+            # checkpoint 恢复会"醒来"，行为分叉，test_persist 暴露）
+            "is_sleeping": bool(agi.body.is_sleeping),
+            "sleep_duration": int(agi.sleep_cycle.sleep_duration),
         }
     except Exception:
         pass
@@ -159,8 +163,12 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
     try:
         data = torch.load(path, map_location="cpu", weights_only=True)
     except Exception as e:
-        print(f"[PERSIST] checkpoint 加载失败: {e}")
-        return False
+        # 旧档/含非标准对象（value_system 等）weights_only 失败——
+        # 回退完整反序列化（本地自产 checkpoint 信任源；警告明确，
+        # 纵深防御优先 weights_only，回退仅作兼容）
+        print(f"[PERSIST] weights_only 加载失败: {e}")
+        print("[PERSIST] 回退完整加载（本地信任源）")
+        data = torch.load(path, map_location="cpu", weights_only=False)
 
     # 1. 认知核心权重
     if agi.cognition is not None and "cognition" in data:
@@ -310,6 +318,10 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
             agi.body.integrity = b["integrity"]
             agi.body.fatigue = b["fatigue"]
             agi.body.stress = b["stress"]
+            # 睡眠状态恢复（与保存对应——防恢复后"醒来"分叉）
+            agi.body.is_sleeping = bool(b.get("is_sleeping", False))
+            agi.sleep_cycle.is_sleeping = agi.body.is_sleeping
+            agi.sleep_cycle.sleep_duration = int(b.get("sleep_duration", 0))
         except Exception:
             pass
 

@@ -686,7 +686,14 @@ class AGI:
                     pass
             
             # 睡眠由驱动力触发状态（不是动作 4；睡眠是状态，动作编号 4 = down）
-            if drive_bias[4] > 0.7 and self.body.energy > 0.5 and not self.body.is_sleeping:
+            # 集成短板修复：能量条件 0.5→0.3（同 should_sleep 根因）；
+            # 极端疲劳（>0.85）无条件强制睡眠（困到极点无法保持清醒）
+            extreme_fatigue = self.body.fatigue > 0.85
+            if drive_bias[4] > 0.7 and self.body.energy > 0.3 \
+                    and not self.body.is_sleeping:
+                self.body.is_sleeping = True
+                self.sleep_cycle.is_sleeping = True
+            elif extreme_fatigue and not self.body.is_sleeping:
                 self.body.is_sleeping = True
                 self.sleep_cycle.is_sleeping = True
         # 睡眠动作（睡眠是状态，不是动作）
