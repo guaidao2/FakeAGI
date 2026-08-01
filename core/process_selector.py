@@ -13,13 +13,12 @@
   - 每个过程维护在线估计的"预期落差消解率"（0-1）
   - 失败（用了过程但落差未消解）→ 估计下降（在线更新，非固化）
   - 成功（落差消解）→ 估计上升
-  - 这是标量版叠加态坍缩：估计 = 该过程"可靠"的后验概率
+  - 默认叠加态估计器（SuperpositionEstimator）：多假设分支 + 贝叶斯坍缩，
+    不单点信任；estimator_mode="scalar" 可退回标量（兼容/对照）
 
 选择逻辑（C3，模型驱动非查表）：
   - 落差 > 阈值时，比较各过程预期收益 = 可靠性 × (1 - 成本)
   - 选 argmax；可靠性低于保底阈值时以 5% 概率试探（防死锁）
-  注意：当前为"标量可靠性评分 + argmax"（叠加态分支升级是后续，
-  见 DESIGN_PROCESS_SELECTION.md C2 承诺）
 """
 
 import numpy as np
@@ -71,17 +70,90 @@ class ProcessEstimator:
         }
 
 
+class SuperpositionEstimator:
+    """
+    C2 升级：叠加态可靠性估计器。
+    维护多个可靠性假设分支（如"问路可靠 0.9 / 一般 0.5 / 不可靠 0.1"），
+    每次观测（成功/失败）坍缩分支权重（贝叶斯），返回加权期望。
+    不单点信任——若环境模式变化（如突然被教歪），低假设分支权重可回升
+    （观测支持时），系统不会永久锁死在单一估计上。
+    """
+    def __init__(self, name: str, prior: float = 0.5,
+                 hypotheses=(0.9, 0.5, 0.1), frozen: bool = False):
+        self.name = name
+        self.hypotheses = np.array(hypotheses, dtype=float)
+        # 初始权重：prior 落在哪个假设附近则略高（其余均分）
+        dist = np.abs(self.hypotheses - prior)
+        self.weights = np.exp(-dist * 4.0)
+        self.weights /= self.weights.sum()
+        self.frozen = frozen
+        self.outcomes = []
+
+    @property
+    def reliability(self) -> float:
+        """加权期望可靠性（坍缩后）"""
+        return float(np.dot(self.weights, self.hypotheses))
+
+    def update(self, success: bool):
+        """观测坍缩：成功→高假设权重升；失败→低假设权重升（贝叶斯）
+        带置信度地板（Dirichlet 先验）——每个假设保留最小权重，
+        防止连续观测把某假设压到数值下溢（不单点信任，C2 核心）。"""
+        if self.frozen:
+            return
+        # 似然：假设 h 下观测到成功/失败的概率 = h 或 1-h
+        lik = self.hypotheses if success else (1.0 - self.hypotheses)
+        raw = self.weights * lik
+        # 置信度地板：相对地板 = 最大权重 × 1%（等价 Dirichlet 伪计数）
+        floor = max(raw) * 0.01
+        raw = np.maximum(raw, floor)
+        # 归一化
+        s = raw.sum()
+        if s > 1e-12:
+            self.weights = raw / s
+        else:
+            self.weights = np.ones_like(self.weights) / len(self.weights)
+        self.outcomes.append(success)
+        if len(self.outcomes) > 100:
+            self.outcomes.pop(0)
+
+    def expected_gain(self, cost: float = 0.0) -> float:
+        """预期收益 = 加权可靠性 × (1 - 成本)"""
+        return self.reliability * (1.0 - cost)
+
+    def freeze(self):
+        """N1 负对照：锁死估计"""
+        self.frozen = True
+
+    def get_state(self) -> dict:
+        return {
+            "name": self.name,
+            "reliability": round(self.reliability, 3),
+            "frozen": self.frozen,
+            "uses": len(self.outcomes),
+            "hypotheses": [round(float(h), 3) for h in self.hypotheses],
+            "weights": [round(float(w), 3) for w in self.weights],
+            "recent_success_rate": (sum(self.outcomes[-20:]) / max(1, len(self.outcomes[-20:]))
+                                    if self.outcomes else 0.0),
+        }
+
+
 class ProcessSelector:
-    """过程选择器：评估各过程预期收益 → 选择"""
+    """过程选择器：评估各过程预期收益 → 选择
+
+    C2：estimator_mode="superposition" 时使用叠加态估计器（默认），
+    estimator_mode="scalar" 时退回标量（兼容旧实验/对照）。"""
 
     def __init__(self, min_reliability: float = 0.15,
-                 ask_cost: float = 0.15):
+                 ask_cost: float = 0.15,
+                 estimator_mode: str = "superposition"):
         self.min_reliability = min_reliability  # 低于此不再选择（N2 场景）
         self.ask_cost = ask_cost                # 问路机会成本（占 tick，intrinsic）
         self.sweep_cost = 0.05                  # 扫掠也有微小成本（移动能耗）
+        self.estimator_mode = estimator_mode
+        est_cls = SuperpositionEstimator if estimator_mode == "superposition" else ProcessEstimator
         self.estimators = {
-            "ask": ProcessEstimator("ask", prior=0.5),
-            "sweep": ProcessEstimator("sweep", prior=0.3),
+            "ask": est_cls("ask", prior=0.5),
+            "sweep": est_cls("sweep", prior=0.3),
         }
         self.selected = None
         self.selection_history = []   # (tick, selected, ask_rel, sweep_rel)
