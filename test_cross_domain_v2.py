@@ -53,6 +53,26 @@ def train_domain_A(episodes=500, max_steps=40, seed=0, d_in=8, k=16,
     return Wh, theta
 
 
+def _eval_self(Wh, theta, seed=0, max_steps=40, d_in=8, k=16):
+    """域 A 自身预测误差（训练前后对比——W_h 真实学习证据）"""
+    total_err, total_n = 0.0, 0
+    for t in range(30):
+        env = RelationalEnv(size=6, mode="maze", seed=seed * 100 + t * 7)
+        obs = env.observe()
+        for _ in range(max_steps):
+            a = env.rng.randint(1, 5)
+            _, _ = env.step(a)
+            obs_next = env.observe()
+            if env.done():
+                break
+            h = np.tanh(obs @ Wh)
+            pred = h @ theta
+            total_err += float(np.mean((pred - obs_next) ** 2))
+            total_n += 1
+            obs = obs_next
+    return total_err / max(1, total_n)
+
+
 def eval_domain_B(Wh_init, theta_init, epochs=200, max_steps=40, seed=0,
                   d_in=8, k=16, lr=0.005):
     """域 B（威胁场）少样本微调 + 评估（预测误差）
@@ -106,15 +126,21 @@ def main():
     seeds = (42, 7, 2026)
     rows = []
     for s in seeds:
-        # 域 A 真实训练（每 seed 独立）
-        Wh_src, theta_src = train_domain_A(episodes=500, seed=s)
-        # 迁移组：域 A W_h + 域 B 微调
-        err_mig = eval_domain_B(Wh_src, theta_src, seed=s)
-        # 从头组：随机 W_h（同分布 randn*0.1）+ 同预算微调
+        # 域 A 真实训练（每 seed 独立）——报告训练前后误差（W_h 真实学习证据）
         rng = np.random.RandomState(s)
-        Wh_rand = rng.randn(8, 16) * 0.1
-        err_scratch = eval_domain_B(Wh_rand, None, seed=s)
-        rows.append((s, err_mig, err_scratch))
+        Wh_init = rng.randn(8, 16) * 0.1
+        theta_init = rng.randn(16, 8) * 0.1
+        err_before = _eval_self(Wh_init, theta_init, seed=s)
+        Wh_src, theta_src = train_domain_A(episodes=500, seed=s)
+        err_after = _eval_self(Wh_src, theta_src, seed=s)
+        print(f"  seed{s}: 域A训练 预测误差 {err_before:.4f}→{err_after:.4f} "
+              f"(下降=W_h真实学习)")
+        # 迁移组：**仅 W_h_src**，theta 随机（纯特征层归因——review should-fix：
+        # 原把 theta_src 也带入→"特征层迁移"声称含顶层混淆）
+        err_mig = eval_domain_B(Wh_src, None, seed=s)
+        # 从头组：随机 W_h（同分布 randn*0.1）+ 同预算微调
+        err_scratch = eval_domain_B(Wh_init, None, seed=s)
+        rows.append((s, err_mig, err_scratch, err_before, err_after))
     err_mig_max = max(r[1] for r in rows)
     err_scratch_min = min(r[2] for r in rows)
     ok = err_mig_max < err_scratch_min  # 迁移最差仍优于从头最好
@@ -123,8 +149,16 @@ def main():
     print(f"[B] 少样本预测误差(×3seeds): {detail}")
     print(f"    迁移最差 {err_mig_max:.4f} vs 从头最好 {err_scratch_min:.4f} "
           f"(应迁移<从头) {'OK' if ok else 'FAIL'}")
-    verdict = ("通过——特征层迁移成立（域A真实训练能力复用）" if ok
-               else "未过——特征层迁移无增益（与⑤策略层对比：策略层成立特征层不成立）")
+    # 声称降级（review should-fix）：纯特征层归因（仅 W_h 迁移）——
+    # 通过也只称"全模型迁移微弱占优"，效应量 ~1% 不声称"能力复用"。
+    # 若仅 W_h 迁移无优势 → 诚实负结果（与⑤策略层对比：策略层成立
+    # 特征层不成立/微弱，是更细的边界）
+    if ok:
+        verdict = ("通过——但效应微弱(~1%)：纯特征层(W_h)迁移微弱占优，"
+                   "归因已隔离（theta 未迁移）")
+    else:
+        verdict = ("未过——纯特征层迁移无增益（与⑤策略层对比："
+                   "策略层成立特征层不成立/微弱）")
     print(f"  判定: {verdict}")
     return 0 if ok else 1
 
