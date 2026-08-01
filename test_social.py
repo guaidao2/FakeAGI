@@ -201,6 +201,7 @@ def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
         "conflicts": env.conflicts,
         "deaths": deaths,
         "survival": (surv_a + surv_b) / 2,  # 平均存活
+        "surv_gap": abs(surv_a - surv_b),   # 存活差（小=共存/轮流）
     }
 
 
@@ -242,12 +243,17 @@ def main():
     seeds = (42, 7, 2026)
     # 稀缺度梯度（用户生物学假设验证）：
     #   n_food 少 = 资源稀缺（易冲突）；n_food 多但 gather_cost 高 =
-    #   资源丰富但难得（可能合作/共存）
+    #   资源丰富但难得（可能合作/共存——假说后半补验）
+    #   成本梯度 0/15/30/60：成本越高，抢同一块的停留代价越大，
+    #   越可能演化出"分开取食/轮流"（共享）
     configs = [
         ("稀缺-易得", dict(n_food=2, gather_cost=0)),
         ("稀缺-难获", dict(n_food=2, gather_cost=15)),
-        ("中等-易得", dict(n_food=4, gather_cost=0)),
+        ("稀缺-极难", dict(n_food=2, gather_cost=30)),
+        ("丰富-易得", dict(n_food=8, gather_cost=0)),
         ("丰富-难获", dict(n_food=8, gather_cost=15)),
+        ("丰富-极难", dict(n_food=8, gather_cost=30)),
+        ("丰富-极高", dict(n_food=8, gather_cost=60)),
     ]
     summary = []
     all_ok = True
@@ -260,22 +266,46 @@ def main():
             single = run_single(seed=s, **cfg)
             rows.append((s, soc, single))
             print(f"  [{label}] seed{s}: 双食物={soc['food']} 冲突={soc['conflicts']} "
-                  f"存活={soc['survival']:.0f} | 单食物={single['food']} "
-                  f"存活={single['survival']:.0f}")
+                  f"存活={soc['survival']:.0f} 存活差={soc['surv_gap']:.0f} "
+                  f"| 单食物={single['food']} 存活={single['survival']:.0f}")
         conf_sum = sum(r[1]["conflicts"] for r in rows)
         surv_min = min(r[1]["survival"] for r in rows)
         single_surv_min = min(r[2]["survival"] for r in rows)
+        # 共存指标：存活差均值（小=轮流/共享资源→双方都活）
+        gap_avg = sum(r[1]["surv_gap"] for r in rows) / len(rows)
         # 有效性检查（review blocking）：难获配置食物必须 >0
         # （gather 机制损坏时食物恒 0——配置无效）
         food_sum = sum(r[1]["food"] for r in rows)
         if cfg["gather_cost"] > 0 and food_sum == 0:
             print(f"  [!!] {label} 食物全 0——gather 机制异常，配置无效")
             all_ok = False
-        summary.append((label, conf_sum, surv_min, single_surv_min, food_sum))
-    print("\n=== 稀缺度-冲突曲线（用户假设验证）===")
-    for label, conf, surv, single, food in summary:
-        print(f"  {label}: 冲突事件={conf}（×3seeds 合计）双总食物={food} "
-              f"双最差存活={surv:.0f} 单最差存活={single:.0f}")
+        summary.append((label, conf_sum, surv_min, single_surv_min,
+                        food_sum, gap_avg))
+    print("\n=== 稀缺度-成本-冲突曲线（假说检验）===")
+    for label, conf, surv, single, food, gap in summary:
+        print(f"  {label}: 冲突={conf}（×3seeds）双总食物={food} "
+              f"双最差存活={surv:.0f} 单最差存活={single:.0f} 存活差均值={gap:.0f}")
+
+    # 假说后半（补验）：丰富 + 成本升高 → 冲突下降 / 共存（存活差小）
+    print("\n=== 假说后半：丰富-成本梯度 ===")
+    rich_cfgs = [x for x in summary if x[0].startswith("丰富")]
+    costs = [0, 15, 30, 60]
+    conf_by_cost = {}
+    gap_by_cost = {}
+    for label, conf, surv, single, food, gap in rich_cfgs:
+        cost = {"丰富-易得": 0, "丰富-难获": 15, "丰富-极难": 30,
+                "丰富-极高": 60}[label]
+        conf_by_cost[cost] = conf
+        gap_by_cost[cost] = gap
+    confs = [conf_by_cost.get(c, 0) for c in costs]
+    gaps = [gap_by_cost.get(c, 0) for c in costs]
+    print(f"  成本 0/15/30/60 → 冲突 {confs}、存活差 {gaps}")
+    # 共存判据：成本 60 冲突显著低于成本 0（下降 >50%）且存活差缩小
+    conflict_drop = (confs[0] - confs[3]) / max(1, confs[0])
+    gap_drop = (gaps[0] - gaps[3]) / max(1, gaps[0])
+    co_exist = conflict_drop > 0.5 and gap_drop > 0.3
+    print(f"  冲突降幅 {conflict_drop*100:.0f}%、存活差降幅 {gap_drop*100:.0f}%")
+    print(f"  共存涌现{'OK' if co_exist else '未证'}（冲突-50%且存活差-30% 为判据）")
 
     # ablation 对照：他者模型开关（review blocking——冲突归因）
     print("\n=== 他者模型 ablation（稀缺-难获配置）===")
