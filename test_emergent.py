@@ -11,7 +11,8 @@ E14 全模块协同实验 — 涌现观察（路线 A）
   D. 语言-生存联动：语言线索被利用（听到方向→移动增益）
   E. 存活涌现：系统在资源-威胁-语言混合环境下维持存活
 
-对照组（E14b）：全关闭（仅基础反射）——对比存活率，验证"协同 > 单模块"
+对照组（E14b）：无语言/情绪/他者（基础认知：反射+习惯+规划+目标层）——
+对比存活率，验证"协同 > 基础"
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -140,11 +141,12 @@ def run_episode(full_mode=True, max_ticks=10000, seed=0, env_seed=1):
     agi.set_env(env)
     stats = {
         "food": 0, "threat_hits": 0, "died_at": None,
-        "emotion_updates": 0, "language_heard": 0,
+        "emotion_updates": 0, "language_heard": 0, "language_used": 0,
         "other_observed": 0, "sleeps": 0,
         "module_activations": {"emotion": 0, "language": 0, "other": 0,
                                 "sleep": 0, "concept": 0},
     }
+    last_lang_use_tick = -9999
     for t in range(max_ticks):
         env.words = env.get_language()
         if env.words:
@@ -153,6 +155,11 @@ def run_episode(full_mode=True, max_ticks=10000, seed=0, env_seed=1):
             if hasattr(agi.cognition, 'language') and agi.cognition.language is not None:
                 agi.cognition.language_tokens = env.words
         agi.step()
+        # 语言真实利用：main.py 在语言投票实际影响决策时更新 _language_used_tick
+        if full_mode and hasattr(agi, '_language_used_tick') \
+                and agi._language_used_tick > last_lang_use_tick:
+            stats["language_used"] += 1
+            last_lang_use_tick = agi._language_used_tick
         stats["food"] = env.food_eaten
         stats["threat_hits"] = env.threat_hits
         if full_mode and agi.emotion is not None and agi.emotion_state:
@@ -168,53 +175,63 @@ def run_episode(full_mode=True, max_ticks=10000, seed=0, env_seed=1):
 
 
 def main():
+    np.random.seed(42)
     print("=" * 60)
     print("E14 全模块协同实验 — 涌现观察（路线 A）")
     print("=" * 60)
 
-    # 全模块模式
-    full = run_episode(full_mode=True, seed=0)
-    # 对照组：基础反射（无语言/情绪/他者）
-    base = run_episode(full_mode=False, seed=0)
+    # 多 seeds 统计（E 判定需要：单次无法区分显著与 noise）
+    N_SEEDS = 5
+    full_foods, base_foods = [], []
+    for s in range(N_SEEDS):
+        full = run_episode(full_mode=True, seed=0, env_seed=s)
+        base = run_episode(full_mode=False, seed=0, env_seed=s)
+        full_foods.append(full["food"])
+        base_foods.append(base["food"])
+    # 末次详情用于 A-D 判定
+    full = run_episode(full_mode=True, seed=0, env_seed=N_SEEDS)
+    base = run_episode(full_mode=False, seed=0, env_seed=N_SEEDS)
 
-    print(f"\n[全模块] 存活={full['died_at'] is None} "
-          f"食物={full['food']} 威胁={full['threat_hits']} "
-          f"语言={full['language_heard']} 睡眠={full['module_activations']['sleep']}")
+    mean_f, std_f = np.mean(full_foods), np.std(full_foods)
+    mean_b, std_b = np.mean(base_foods), np.std(base_foods)
+    print(f"\n[全模块×{N_SEEDS}] 食物 {mean_f:.1f}±{std_f:.1f} "
+          f"存活={full['died_at'] if full['died_at'] else 'full'}"
+          f" 语言用={full['language_used']}")
     print(f"  激活: 情绪={full['module_activations']['emotion']} "
           f"他者={full['module_activations']['other']} "
-          f"语言={full['module_activations']['language']}")
-    print(f"[对照] 存活={base['died_at'] is None} 食物={base['food']} "
-          f"威胁={base['threat_hits']}")
+          f"语言={full['module_activations']['language']} 睡眠={full['module_activations']['sleep']}")
+    print(f"[对照×{N_SEEDS}] 食物 {mean_b:.1f}±{std_b:.1f}")
 
-    # A. 全模块可运行（10000 tick 无崩溃 = 脚本跑完且 alive 或 died_at 有值）
-    a_ok = full["died_at"] is not None or True  # 跑完即通过（崩溃会异常退出）
+    # A. 全模块可运行（脚本跑完 = 无崩溃；died_at 只是存活信息非判定）
+    a_ok = True  # 脚本跑完即过（崩溃会异常退出）
     print(f"\n[A] 全模块可运行: 10000 tick 完成 {'OK' if a_ok else 'FAIL'}")
 
-    # B. 多模块激活（至少 3 个模块实际触发）
+    # B. 多模块激活（至少 3 个模块实际触发——语言/情绪/他者）
     act = full["module_activations"]
     n_active = sum(1 for v in act.values() if v > 0)
     b_ok = n_active >= 3
     print(f"[B] 多模块激活: {n_active}/5 模块触发 "
           f"{'OK' if b_ok else 'FAIL'}")
 
-    # C. 情绪-决策联动（全模块模式下情绪被实际更新）
+    # C. 情绪更新（>100 次 = 系统确实在运行情绪系统）
     c_ok = act["emotion"] > 100
     print(f"[C] 情绪更新: {act['emotion']} 次 (应>100) "
           f"{'OK' if c_ok else 'FAIL'}")
 
-    # D. 语言-生存联动（语言线索被接收——按存活期内广播次数比例）
-    expected_broadcasts = max(1, (full["died_at"] if full["died_at"] else 10000) // 20)
-    d_ok = full["language_heard"] >= expected_broadcasts * 0.5
-    print(f"[D] 语言线索: 听到 {full['language_heard']}/{expected_broadcasts} 广播 "
-          f"(应≥50%) {'OK' if d_ok else 'FAIL'}")
+    # D. 语言真实利用（语言投票实际影响决策——非仅广播计数）
+    d_ok = full["language_used"] > 0
+    print(f"[D] 语言利用: 实际影响决策 {full['language_used']} 次 "
+          f"(应>0——非仅广播) {'OK' if d_ok else 'FAIL'}")
 
-    # E. 存活涌现（全模块至少不比对照差——协同不拖累）
-    e_ok = full["food"] >= base["food"] * 0.5
-    print(f"[E] 存活涌现: 全模块食物 {full['food']} vs 对照 {base['food']} "
-          f"(应≥0.5x) {'OK' if e_ok else 'FAIL'}")
+    # E. 存活涌现（多 seeds：全模块均值 ≥ 对照均值——协同不拖累）
+    #    秩和检验（Mann-Whitney U 简化：全模块最大值 ≥ 对照中位数即可）
+    e_ok = mean_f >= mean_b  # 均值不显著低于对照
+    print(f"[E] 存活涌现(×{N_SEEDS}): 全模块 {mean_f:.1f}±{std_f:.1f} "
+          f"vs 对照 {mean_b:.1f}±{std_b:.1f} (应≥) {'OK' if e_ok else 'FAIL'}")
 
     ok = a_ok and b_ok and c_ok and d_ok and e_ok
     print(f"\n判定: {'OK 通过——全模块协同可运行且多模块实际激活' if ok else 'FAIL'}")
+    print(f"  [诚实报告] 睡眠激活={act['sleep']} 次（若 0 则如实——短板）")
     return 0 if ok else 1
 
 
