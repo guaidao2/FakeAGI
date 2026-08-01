@@ -236,7 +236,7 @@ session 结束（死亡/主动保存）
 - `python test_language_survival.py` — 语言生存压力 ✅
 - `python test_language_intent.py` — 语言意图 ✅
 - `python test_control_ab.py` — 对照实验（预测误差 vs RL，如实记录非判定）
-- `python test_goal_layer.py` — 目标层消融（E13，n=3 弱支持）
+- `python test_goal_layer.py` — 目标层消融（E13，**n=30 统计判定**：① 扫掠强确认 7.3 倍/26-30，② 门控增量降级未过 1.16x<1.2——n=3 的 1.4 倍是弱样本夸大）
 - `python test_process_selector.py` — 过程选择（② 第一阶段，V1-V4+N1-N4，n=5）
 - `python test_process_integration.py` — 过程选择接入冒烟（② 第二阶段，6 项）
 - `python run_process_selection_study.py` — 过程选择 n=30 预注册研究（判定全过）
