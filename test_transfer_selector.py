@@ -214,7 +214,7 @@ def main():
     r_after_b = sel.estimator.reliability
     a_ok = r_after_b > 0.60  # 与 C1 判定阈值一致（同构经验后应≥阈值）
     print(f"[A] 同构域B×5反馈: 迁移{b_mig} vs 从头{b_scr} (末次) → 可靠性 "
-          f"{r_after_b:.2f} (应>0.5) {'OK' if a_ok else 'FAIL'}")
+          f"{r_after_b:.2f} (应>0.60) {'OK' if a_ok else 'FAIL'}")
 
     # 3b. D（同构新威胁场）在 B 反馈后测——应选 transfer
     d_choice = sel.choose("unknown_threat_D")
