@@ -96,6 +96,11 @@ class AGI:
         self.override_action = -1
         self._food_recently_tick = -1000
         self.causal_error = 0.0
+        # 情绪系统（默认关闭——接入点：探索率调制）
+        self.emotion = None
+        self.emotion_state = {}
+        # 他者模型（真他者跟踪，默认关闭——区别于 hemin 影子自我 self.other_model）
+        self.other_tracker = None
         # P8a: 语言可信度（可学习先验——听词结果好则强化，差则坍缩）
         self._language_trust = 0.5  # 初始半信半疑（可被经验修正）
         self._language_used_tick = 0
@@ -404,6 +409,21 @@ class AGI:
             # 学习驱动的反射抑制：当 GameNN 学到可靠策略时，抑制本能反射
             gamenn_confidence = self.cognition.gamenn.confidence if hasattr(self.cognition, 'gamenn') else 0.0
             suppress_reflex = gamenn_confidence > 0.15
+
+            # ─── 情绪系统：生理+认知→情绪向量→探索率调制（默认关闭，零影响）───
+            if getattr(self, '_emotion_enabled', False):
+                if self.emotion is None:
+                    from core.emotion import EmotionSystem
+                    self.emotion = EmotionSystem()
+                self.emotion.update(
+                    energy=self.body.energy, water=self.body.water,
+                    health=self.body.health, stress=self.body.stress,
+                    surprise=surprise, danger=danger_nearby, tick=self.tick)
+                emo = self.emotion.get_state()
+                # 恐惧→激进（探索率升），好奇→探索；仅调制非恒定探索模式
+                if getattr(self, '_const_explore', None) is None:
+                    exploration = self.emotion.modulate_action(exploration)
+                self.emotion_state = emo
             
             # 元认知系统更新
             if self.metacognition is not None:
@@ -533,6 +553,25 @@ class AGI:
                         and len(self.moe.experts) >= 1
                         and gamenn_confidence < 0.1):
                     action = moe_action
+                # ─── 他者模型：竞争回避覆盖（默认关闭）───
+                # 环境需提供 get_other_pos()（共享环境）与 get_food_pos()（资源）
+                if (getattr(self, '_other_agent_enabled', False)
+                        and hasattr(self.env, 'get_other_pos')):
+                    try:
+                        if self.other_tracker is None:
+                            from core.other_agent import OtherModel
+                            self.other_tracker = OtherModel()
+                        other_pos = self.env.get_other_pos()
+                        food_pos = self.env.get_food_pos()
+                        self.other_tracker.observe(other_pos, self.pos,
+                                                   food_pos, self.tick)
+                        if self.other_tracker.intent == "competitor":
+                            avoid = self.other_tracker.get_avoidance(self.pos)
+                            if avoid is not None:
+                                action = avoid
+                        self.other_state = self.other_tracker.get_state()
+                    except Exception:
+                        pass
             
             # GameNN 学习：基于能量变化的奖励信号（用 LNN hidden 作状态）
             if (hasattr(self.cognition, 'gamenn') and self.cognition.hidden is not None):
