@@ -12,6 +12,12 @@ from cognition import CognitionPipeline
 
 def test():
     print("P0: checkpoint 持久化往返测试", flush=True)
+    # 测试自洁：删除遗留旧档（旧代码生成的档含非安全对象，weights_only
+    # 默认拒绝——新档由当前代码生成应 weights_only 兼容）
+    import os as _os
+    old = _os.path.join("checkpoints", "checkpoint_test.pth")
+    if _os.path.exists(old):
+        _os.remove(old)
     
     # 第一个生命：跑 200 tick 后保存
     agi1 = AGI()

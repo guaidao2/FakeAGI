@@ -28,6 +28,35 @@ def _ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
 
+def _sanitize(obj):
+    """递归转纯 torch 安全类型（weights_only 兼容）：
+    numpy array→list；numpy 标量→原生 Python；torch tensor 保留；
+    其他对象→str。根治 weights_only 拒绝（save 侧修复，load 无需回退）"""
+    import numbers
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    mod = type(obj).__module__ or ""
+    if mod.startswith("numpy"):
+        # numpy array / 标量：有 shape 是 array→list，否则标量→原生
+        if hasattr(obj, "shape") and getattr(obj, "ndim", 0) > 0:
+            return obj.tolist()
+        try:
+            return obj.item()
+        except Exception:
+            return str(obj)
+    if isinstance(obj, numbers.Integral):
+        return int(obj)
+    if isinstance(obj, numbers.Real):
+        return float(obj)
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    if mod.startswith("torch") and hasattr(obj, "shape"):
+        return obj  # torch tensor 保留
+    return str(obj)  # 兜底：其他对象转字符串
+
+
 def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
     """保存 AGI 完整状态到 checkpoint 文件"""
     if path is None:
@@ -146,14 +175,17 @@ def save_checkpoint(agi, path: str = None, tag: str = "latest") -> str:
         "alive": agi.alive,
     }
 
-    torch.save(data, path)
+    torch.save(_sanitize(data), path)
     print(f"[PERSIST] checkpoint 已保存: {path} "
           f"(tick={agi.tick}, survival={agi.survival_ticks})")
     return path
 
 
-def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
-    """从 checkpoint 恢复 AGI 状态。返回是否成功。"""
+def load_checkpoint(agi, path: str = None, tag: str = "latest",
+                    allow_fallback: bool = False) -> bool:
+    """从 checkpoint 恢复 AGI 状态。返回是否成功。
+    allow_fallback=False（安全默认）：weights_only 拒绝即失败；
+    显式 True 仅用于信任源的旧档兼容。"""
     if path is None:
         path = os.path.join(CHECKPOINT_DIR, f"checkpoint_{tag}.pth")
     if not os.path.exists(path):
@@ -163,14 +195,16 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
     try:
         data = torch.load(path, map_location="cpu", weights_only=True)
     except Exception as e:
-        # 仅"weights_only 拒绝"类异常才回退（旧档/含非标准对象）——
-        # 其他异常（文件损坏等）直接失败，不扩大回退面
-        # （review should-fix：无差别回退让攻击者以投毒 checkpoint 达 pickle RCE 面）
-        if "Weights only load failed" not in str(e):
-            print(f"[PERSIST] checkpoint 加载失败: {e}")
+        # weights_only 拒绝时**默认失败**——不自动回退（security MEDIUM：
+        # 投毒 checkpoint 必触发 "Weights only load failed"，字符串门控
+        # 无法区分合法旧档与恶意档，自动回退 = pickle RCE 面）。
+        # 仅当调用方显式 opt-in（allow_fallback=True，信任源场景）才回退。
+        if not allow_fallback:
+            print(f"[PERSIST] weights_only 加载失败: {e}")
+            print("[PERSIST] 安全默认：拒绝加载。如确认 checkpoint 来自"
+                  "可信源，可显式 allow_fallback=True 重试。")
             return False
-        print(f"[PERSIST] weights_only 拒绝（旧档非标准对象）: {e}")
-        print("[PERSIST] 回退完整加载（本地信任源）")
+        print(f"[PERSIST] weights_only 拒绝，调用方 opt-in 回退: {e}")
         data = torch.load(path, map_location="cpu", weights_only=False)
 
     # 1. 认知核心权重
