@@ -49,22 +49,28 @@ class AskEnv:
         return np.array([(wx-self.pos[0])/self.size, (wy-self.pos[1])/self.size])
 
     def answer_query(self, word):
-        """主动问路接口（坑2：不依赖被动广播）"""
+        """主动问路接口（坑2：不依赖被动广播）。
+        返回 (direction, correct)：correct=False 表示答错（噪声），
+        Controller 据此更新可靠性（答错=失败，坑4/复审）。"""
         self.ask_calls += 1
         if not self.ask_available:
-            return None
+            return None, False
         if word not in ("food", "water"):
-            return None
+            return None, False
         if self.mode == "fail":
-            return None
+            return None, False
         target = self.food_pos if word == "food" else self.water_pos
         dx = target[0] - self.pos[0]
         dy = target[1] - self.pos[1]
-        if self.mode == "noisy" and np.random.random() < 0.3:
-            dx, dy = -dx, -dy  # 30% 答错
+        correct = True
+        if self.mode == "noisy" and np.random.random() < 0.15:
+            dx, dy = -dx, -dy  # 15% 答错（温和噪声：问路多数有用，偶尔失败）
+            correct = False
         if abs(dx) >= abs(dy):
-            return "east" if dx > 0 else ("west" if dx < 0 else ("south" if dy > 0 else "north"))
-        return "south" if dy > 0 else "north"
+            d = "east" if dx > 0 else ("west" if dx < 0 else ("south" if dy > 0 else "north"))
+        else:
+            d = "south" if dy > 0 else "north"
+        return d, correct
 
     def step(self, a):
         self.steps += 1
@@ -142,7 +148,7 @@ class Controller:
             if choice == "ask":
                 # 坑1：主动问路（speak→answer_query）
                 word = "food" if self.energy < self.water else "water"
-                direction = self.env.answer_query(word)
+                direction, correct = self.env.answer_query(word)
                 self.ask_count += 1
                 self.why["selector:ask"] += 1
                 # 方向→动作（东西南北）
@@ -150,7 +156,8 @@ class Controller:
                 if direction in DIR_MAP:
                     action = DIR_MAP[direction]
                 self._ask_history.append((self.tick, self.energy))
-                self._update_ask_reliability(direction is not None)
+                # 可靠性信号：得到方向且答对=成功；答错/无响应=失败（复审）
+                self._update_ask_reliability(correct and direction is not None)
             elif choice == "sweep":
                 self.sweep_count += 1
                 self.why["selector:sweep"] += 1
@@ -186,19 +193,20 @@ class Controller:
         self._ask_ever_updated = True
 
     def _check_ask_outcome(self):
-        """窗口化落差消解率（坑4）：问路后 WINDOW tick 内能量上升=消解"""
+        """窗口化落差消解率（坑4）：问路后 WINDOW tick 内能量上升=消解；
+        超窗未消解=失败。先清理过期再判消解（修复死代码分支）。"""
         if self.selector is None:
             return
-        pending = [h for h in self._ask_history
-                   if self.tick - h[0] <= self.WINDOW and h[0] != self.tick]
-        if not pending:
-            return
-        for (at, ae) in pending:
-            if self.energy > ae + 0.05:   # 消解
+        # 1) 过期清理：超窗未消解 → 失败
+        stale = [h for h in self._ask_history if self.tick - h[0] > self.WINDOW]
+        for (at, ae) in stale:
+            self._ask_fail += 1
+            self._ask_history.remove((at, ae))
+        # 2) 消解判定（快照遍历防修改迭代）
+        still = list(self._ask_history)
+        for (at, ae) in still:
+            if self.energy > ae + 0.05:   # 窗口内能量上升=消解
                 self._ask_success += 1
-                self._ask_history.remove((at, ae))
-            elif self.tick - at > self.WINDOW:  # 超窗未消解
-                self._ask_fail += 1
                 self._ask_history.remove((at, ae))
 
 

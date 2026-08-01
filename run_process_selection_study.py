@@ -32,11 +32,13 @@ MAX_TICKS = 2000
 
 
 def _result_path(group, seed, cfg):
-    """结果路径含配置指纹——配置变更时旧结果自动失效（防缓存污染）"""
+    """结果路径含配置指纹——配置变更时旧结果自动失效（防缓存污染）
+    指纹：mode + frozen + ask_available + process_enabled + max_ticks"""
     mode = cfg["mode"]
     frozen = "f" if cfg.get("frozen", False) else "u"
     askav = "a" if cfg.get("ask_available", True) else "n"
-    fname = f"{group}_{mode}_{frozen}{askav}_s{seed:02d}.json"
+    pe = "p" if cfg.get("process_enabled", True) else "o"
+    fname = f"{group}_{mode}_{frozen}{askav}{pe}_t{MAX_TICKS}_s{seed:02d}.json"
     return os.path.join(RESULTS_DIR, fname)
 
 
