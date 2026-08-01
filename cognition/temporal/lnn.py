@@ -116,8 +116,9 @@ class LNN(nn.Module):
             self.output_layer.weight[:old_h, :old_h] = old_out
             self.output_layer.bias[:old_h] = old_out_bias
             # 新神经元稀疏初始化：只随机连接少量旧神经元（稀疏突触生长）
+            # 固定种子源（可复现性——全局 np.random 不可依赖，见 security 审查）
             n_new = new_h - old_h
-            rng = np.random.default_rng()
+            rng = np.random.RandomState(42)
             for i in range(n_new):
                 row = old_h + i
                 # 从旧神经元中随机选 ~20% 建立初始连接（其余为 0）

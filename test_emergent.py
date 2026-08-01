@@ -176,6 +176,8 @@ def run_episode(full_mode=True, max_ticks=10000, seed=0, env_seed=1):
 
 def main():
     np.random.seed(42)
+    import torch
+    torch.manual_seed(42)  # 固定 torch RNG（superposition split 等依赖——可复现性）
     print("=" * 60)
     print("E14 全模块协同实验 — 涌现观察（路线 A）")
     print("=" * 60)
