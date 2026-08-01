@@ -81,7 +81,10 @@ class SuperpositionEstimator:
     def __init__(self, name: str, prior: float = 0.5,
                  hypotheses=(0.9, 0.5, 0.1), frozen: bool = False):
         self.name = name
-        self.hypotheses = np.array(hypotheses, dtype=float)
+        h = np.asarray(hypotheses, dtype=float)
+        if h.size == 0 or not np.all(np.isfinite(h)) or np.any(h < 0) or np.any(h > 1):
+            h = np.array([0.9, 0.5, 0.1], dtype=float)  # 非法→默认假设
+        self.hypotheses = h
         # 初始权重：prior 落在哪个假设附近则略高（其余均分）
         dist = np.abs(self.hypotheses - prior)
         self.weights = np.exp(-dist * 4.0)
@@ -96,10 +99,18 @@ class SuperpositionEstimator:
 
     @reliability.setter
     def reliability(self, value: float):
-        """测试/场景注入：单值→对应假设权重分布（贴近 value 的假设权重升）"""
+        """测试/场景注入：单值→对应假设权重分布（贴近 value 的假设权重升）
+        防 NaN/Inf 注入：先钳制到 [0,1]（防御性，复用 update 的保护）"""
+        if value is None or not np.isfinite(value):
+            value = self.prior  # NaN/Inf → 回退先验（不污染权重）
+        value = float(np.clip(value, 0.0, 1.0))
         dist = np.abs(self.hypotheses - value)
         self.weights = np.exp(-dist * 8.0)
-        self.weights /= self.weights.sum()
+        s = self.weights.sum()
+        if s > 1e-12:
+            self.weights /= s
+        else:
+            self.weights = np.ones_like(self.weights) / len(self.weights)
 
     def update(self, success: bool):
         """观测坍缩：成功→高假设权重升；失败→低假设权重升（贝叶斯）

@@ -31,7 +31,19 @@ class EmotionSystem:
 
     def update(self, energy=0.5, water=0.5, health=1.0, stress=0.0,
                surprise=0.0, danger=0.0, tick=0):
-        """生理 + 认知 → 情绪向量"""
+        """生理 + 认知 → 情绪向量
+        入口 NaN/Inf 防御：非有限输入钳制到安全默认（防上游损坏静默放大）"""
+        def _safe(v, default=0.0, lo=0.0, hi=1.0):
+            if v is None or not np.isfinite(v):
+                return default
+            return float(np.clip(v, lo, hi))
+        energy = _safe(energy, default=0.5)
+        water = _safe(water, default=0.5)
+        health = _safe(health, default=1.0)
+        stress = _safe(stress)
+        surprise = _safe(surprise)
+        danger = _safe(danger)
+
         # 恐惧源：低能量/低水/低健康/高应激/高危险
         need_fear = (1.0 - energy) * 0.6 + (1.0 - health) * 0.8 \
                     + stress * 1.0 + danger * 1.2 + (1.0 - water) * 0.3
