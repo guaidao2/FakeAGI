@@ -11,7 +11,8 @@
 > - ✅ ③ 情绪+他者接入主循环：已实现（`main.py`，`test_integration_emotion_other.py`）
 > - ✅ ④ 跨域迁移：已实现（`core/cross_domain.py`，`test_cross_domain.py` 通过）
 > - ✅ ⑤ 触类旁通：策略层迁移（`test_transfer_analogy.py`）——少样本迁移成立（37vs20），零样本不成立（复审修正）
-> - ✅ ⑥ 迁移价值评估：何时迁移的元认知（`core/transfer_selector.py`）——同构升/异构降/未知域选对（5 项全过）
+> - ✅ ⑥ 迁移价值评估：何时迁移的元认知（`core/transfer_selector.py`）——同构升/异构降/未知域选对（5 项全过）；已接入主循环
+> - ✅ E14 全模块协同：语言+情绪+他者全开（`test_emergent.py`）——5 项全过，暴露睡眠未触发短板
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
@@ -213,6 +214,7 @@ session 结束（死亡/主动保存）
 - [x] **④ 跨域迁移**（`core/cross_domain.py`）— 骨架（域抽象+底层提取+全模型微调）已建；**诚实负结果**（迁移不占优 0.97x/0.86x——初版 7 倍为堆牌已废弃）
 - [x] **⑤ 触类旁通**（`test_transfer_analogy.py`）— 策略层迁移（关系同构域对）：**少样本迁移成立（37vs20）**；零样本不成立（初版"17vs0"为停留基线伪胜利，复审修正）
 - [x] **⑥ 迁移价值评估**（`core/transfer_selector.py`）— 何时迁移的元认知：多假设贝叶斯+幅度加权+保守阈值，同构升/异构降/未知域选对（5 项全过）；**已接入主循环**（`set_env` 环境切换决策，接入验证 5 项全过）
+- [x] **E14 全模块协同**（`test_emergent.py`）— 语言+情绪+他者全开迷宫世界：5 项全过（协同不拖累）；暴露睡眠未触发集成短板
 - [x] **② 过程选择第一阶段**（`core/process_selector.py`）— 语言×目标层统一（可靠性估计+argmax，V1-V4+N1-N4 通过，n=5）
 - [x] **② 过程选择第二阶段**（接入完整主循环 + n=30 预注册）— 判定全过（H1 支持、N1 在线更新必要、零影响护栏）
 - [x] **C2 叠加态升级**（`SuperpositionEstimator`）— 被教歪可逆（多假设+置信度地板），4 项验证 + n=30 回归全过
@@ -245,5 +247,6 @@ session 结束（死亡/主动保存）
 - `python test_transfer_analogy.py` — ⑤ 触类旁通（策略层迁移：少样本 37vs20 成立，零样本不成立）
 - `python test_transfer_selector.py` — ⑥ 迁移价值评估（同构升/异构降/未知域选对，5 项全过）
 - `python test_integration_transfer.py` — ⑥ 接入主循环（环境切换决策，5 项全过）
+- `python test_emergent.py` — E14 全模块协同（涌现观察，5 项全过）
 - `python test_experiment4.py` — 因果推理 ✅（无回归）
 
