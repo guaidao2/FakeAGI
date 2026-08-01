@@ -183,8 +183,9 @@ class GoalPersistence:
 
     def decide(self, env, who, pos, action, progress_now, surprise,
                energy, other_pos):
-        """返回 (最终动作, 是否坚持)：
-        目标未完成→坚持（动作 0 停留）；重大预测误差→放弃（换路）"""
+        """返回 (最终动作, 是否坚持)。
+        review blocking 修复：非坚持返回 None 哨兵（原返回 last_action=0
+        被误判为坚持 → override 恒 0 → AGI 永久停留原地，sc21/sc22 数据作废）"""
         on_food = tuple(pos) in [tuple(f) for f in env.foods]
         if on_food and env.gather_cost > 0:
             if self.target != tuple(pos):
@@ -209,14 +210,14 @@ class GoalPersistence:
             if abandon:
                 self.abandoned += 1
                 self.target = None
-                return action, False          # 放弃：让 AGI 自主决策
+                return None, False            # 放弃：不覆盖（AGI 自主决策）
             # 坚持：停留工作
             self.stick_actions += 1
             return 0, True
         if self.target is not None:
             self.completed += 1               # 离开食物格（获得或放弃后）
             self.target = None
-        return action, False
+        return None, False
 
 
 
@@ -275,7 +276,8 @@ def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
                 en = agi.body.energy
                 final_a, _ = goals[who].decide(
                     env, who, pos, agi.last_action, prog, surp, en, other_pos)
-                agi._goal_override = final_a if final_a == 0 else None
+                # None 哨兵：非坚持不覆盖（AGI 自主决策）
+                agi._goal_override = final_a if final_a is not None else None
                 agi.step()  # 完整 step（override 内部生效）
                 agi._goal_override = None
             else:
