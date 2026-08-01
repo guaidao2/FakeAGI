@@ -17,14 +17,19 @@
 
 选择逻辑（C3，模型驱动非查表）：
   - 落差 > 阈值时，比较各过程预期收益 = 可靠性 × (1 - 成本)
-  - 选 argmax；可靠性低于保底阈值时不再选择该过程（N2 场景）
+  - 选 argmax；可靠性低于保底阈值时以 5% 概率试探（防死锁）
+  注意：当前为"标量可靠性评分 + argmax"（叠加态分支升级是后续，
+  见 DESIGN_PROCESS_SELECTION.md C2 承诺）
 """
 
 import numpy as np
 
 
 class ProcessEstimator:
-    """单个过程的可靠性估计（在线更新，非固化）"""
+    """单个过程的可靠性估计（在线更新，非固化）
+    注意：当前 reliability 是"答对率/成功率"代理——非严格的"落差消解率"
+    （连续 ask 丢方向不惩罚；吃到食物记 sweep 账）。代理语义需在
+    升级叠加态分支时修正（DESIGN_PROCESS_SELECTION.md C2）。"""
     def __init__(self, name: str, prior: float = 0.5,
                  lr_up: float = 0.1, lr_down: float = 0.15):
         self.name = name

@@ -191,8 +191,8 @@ def test():
     v3 = rel_ok > rel_fail + 0.1
     print(f"\nV1: 全错环境 ask 可靠性 {rel_fail:.3f} (<0.3: {'OK' if v1 else 'FAIL'})", flush=True)
     print(f"V3: 恢复正确后可靠性 {rel_ok:.3f} (回升: {'OK' if v3 else 'FAIL'})", flush=True)
-    print(f"  [归因] V3 回升经 3% 试探触发（可靠性<阈值后靠试探重试，", flush=True)
-    print(f"         成功一次即越阈回升——非'模型感知环境变化'）", flush=True)
+    print(f"  [归因] V3 回升经 5% 试探触发（可靠性<阈值后靠试探重试，", flush=True)
+    print(f"         约 2 次成功越阈回升——非'模型感知环境变化'）", flush=True)
 
     # ─── V2 ───
     b, a = test_v2()
@@ -230,13 +230,16 @@ def test():
     a_n3 = np.mean([r["asks"] for r in n3])
     # N1（冻结）问路应显著高于 N4（未冻结）——差 > 两者 std 之和
     n1_gt = a_n1 > a_n4 + sd_n1 + sd_n4
-    # N2（全败）问路应显著低于 N3（噪声）——对称配置族内比较
-    n2_lt = a_n2 < a_n3 * 0.5
+    # N2（全败）问路应显著低于 N3（噪声）——对称配置族内比较，含 std 裕度
+    sd_n2 = np.std([r["asks"] for r in n2])
+    sd_n3 = np.std([r["asks"] for r in n3])
+    n2_lt = a_n2 + sd_n2 < (a_n3 - sd_n3) * 0.5
     n_ok = n1_gt and n2_lt
     print(f"\n  对比阵列: N1 冻结 {a_n1:.0f}±{sd_n1:.0f} vs N4 {a_n4:.0f}±{sd_n4:.0f} "
           f"（冻结应仍问: {'OK' if n1_gt else 'FAIL'}）", flush=True)
-    print(f"  N2 全败 {a_n2:.0f} vs N3 噪声 {a_n3:.0f}（N2 应少问: "
-          f"{'OK' if n2_lt else 'FAIL'}）", flush=True)
+    print(f"  N2 全败 {a_n2:.0f}±{sd_n2:.0f} vs N3 噪声 {a_n3:.0f}±{sd_n3:.0f} "
+          f"（N2 应少问: {'OK' if n2_lt else 'FAIL'}）", flush=True)
+    print(f"  [局限] n=5（预注册为 n=30）——方向结论可读，统计验证需扩大", flush=True)
 
     checks = [("V1 失败→可靠性↓", v1), ("V2 误差进模型", v2),
               ("V3 可逆", v3), ("V4 可靠性驱动切换", v4),
