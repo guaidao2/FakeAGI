@@ -179,7 +179,7 @@ agi/
 - **核心**：将"说话"重构为信息寻求的一种过程选择——系统在"问路"与"自己扫掠"之间，由在线可靠性估计驱动的 argmax 选择（目标不变、过程可换）。
 - **实现**（`core/process_selector.py`）：`ProcessEstimator`（可靠性在线估计：成功 +0.1/失败 -0.15，frozen 可冻结）+ `ProcessSelector`（argmax 预期收益 + 5% 试探防死锁）+ 真机会成本（问路 tick 不移动，intrinsic）。
 - **验收**（`test_process_selector.py`）：V1 失败→可靠性↓（0.5→0.05）/ V2 误差进模型 / V3 可逆（经试探）/ V4 可靠性驱动切换；N1-N4 负对照（N1 冻结仍问 200±0 vs N4 160±3、N2 全败少问 13±3 vs N3 179±35）。
-- **完整循环接入**（`test_process_integration.py` + `run_process_selection_study.py`）：冒烟 6 项全过；n=30 预注册判定全过（H1：N2 2±0 vs N3 390±149；N1：fail 环境冻结 125 vs 在线 2——在线更新必要；零影响护栏 ask=0）。
+- **完整循环接入**（`test_process_integration.py` + `run_process_selection_study.py`）：冒烟 6 项全过；n=30 预注册判定全过（H1：N2 2±0 vs N3 390±149 标量版 / 209±156 叠加态版；N1：fail 环境冻结 125 vs 在线 2——在线更新必要；零影响护栏 ask=0）。
 - **C2 叠加态升级**（`SuperpositionEstimator`，`test_c2_superposition.py`）：多假设分支 + 贝叶斯坍缩 + 置信度地板——被教歪可逆（0.11→0.89 回升且低假设保留），4 项验证 + n=30 回归全过。
 - **边界诚实**：reliability 为答对率代理（叠加态已实现，落差消解率精确化待做）；n=30 预注册。
 

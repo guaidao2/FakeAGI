@@ -200,7 +200,7 @@ agi/
 >
 > **② 过程选择**（语言×目标层统一，独立控制器 + 完整主循环接入）：详见 `PAPER.md §4.6-4.7`——
 > 可靠性在线估计 + argmax 选择（问路 vs 扫掠）。V1-V4 + N1-N4 通过（n=5），
-> 完整循环 n=30 预注册判定全过（H1 支持：N2 2±0 vs N3 390±149；N1 冻结 125 vs 在线 2）。
+> 完整循环 n=30 预注册判定全过（H1 支持：N2 2±0 vs N3 390±149 标量版 / 209±156 叠加态版；N1 冻结 125 vs 在线 2）。
 > 结论：目标不变过程可换在完整循环中存活且可归因；C2 叠加态升级已完成（见技术栈）。
 
 运行：`python test_experimentN.py` / `python test_superposition.py` / `python test_organ_gen.py` / `python test_language.py` / `python test_language_survival.py` / `python test_language_intent.py`
