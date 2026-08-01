@@ -203,17 +203,17 @@ def main():
     src = train_policy("maze", episodes=500)
     print(f"\n[源] 域A迷宫策略训练完成")
 
-    # 2. 迁移评估器初始化（阈值 0.58：需要明确证据才迁移——保守元认知）
-    sel = TransferSelector(min_reliability=0.58)
+    # 2. 迁移评估器初始化（阈值 0.60：需要更明确证据才迁移——保守元认知）
+    sel = TransferSelector(min_reliability=0.60)
 
-    # 3. 域 B 系列（同构威胁场）反馈 ×3：多次同构经验建立信任（更接近真实）
-    for i in range(3):
+    # 3. 域 B 系列（同构威胁场）反馈 ×5：多次同构经验建立信任（更接近真实）
+    for i in range(5):
         b_mig = eval_policy(few_shot(src, "threat", seed_base=100 + i * 50), "threat", seed=500 + i * 50)
         b_scr = eval_policy(few_shot(QTable(), "threat", seed_base=100 + i * 50), "threat", seed=500 + i * 50)
         sel.observe_feedback(b_mig, b_scr)
     r_after_b = sel.estimator.reliability
     a_ok = r_after_b > 0.5
-    print(f"[A] 同构域B×3反馈: 迁移{b_mig} vs 从头{b_scr} (末次) → 可靠性 "
+    print(f"[A] 同构域B×5反馈: 迁移{b_mig} vs 从头{b_scr} (末次) → 可靠性 "
           f"{r_after_b:.2f} (应>0.5) {'OK' if a_ok else 'FAIL'}")
 
     # 3b. D（同构新威胁场）在 B 反馈后测——应选 transfer
@@ -222,14 +222,14 @@ def main():
     print(f"[C1] 同构经验后 D(新威胁场): 可靠性 {r_after_b:.2f} "
           f"→ {d_choice} (应 transfer) {'OK' if d_ok_tmp else 'FAIL'}")
 
-    # 4. 域 C 系列（异构逆场）反馈 ×3：多次异构经验建立"勿迁移"
-    for i in range(3):
+    # 4. 域 C 系列（异构逆场）反馈 ×5：多次异构经验建立"勿迁移"
+    for i in range(5):
         c_mig = eval_policy(few_shot(src, "inverse", seed_base=200 + i * 50), "inverse", seed=600 + i * 50)
         c_scr = eval_policy(few_shot(QTable(), "inverse", seed_base=200 + i * 50), "inverse", seed=600 + i * 50)
         sel.observe_feedback(c_mig, c_scr)
     r_after_c = sel.estimator.reliability
     b_ok = r_after_c < r_after_b
-    print(f"[B] 异构域C×3反馈: 迁移{c_mig} vs 从头{c_scr} (末次) → 可靠性 "
+    print(f"[B] 异构域C×5反馈: 迁移{c_mig} vs 从头{c_scr} (末次) → 可靠性 "
           f"{r_after_c:.2f} (应<{r_after_b:.2f}) {'OK' if b_ok else 'FAIL'}")
 
     # 5. E（异构新逆场）在 C 反馈后测——应选 scratch
@@ -238,15 +238,20 @@ def main():
     print(f"[C2] 异构经验后 E(新逆场): 可靠性 {sel.estimator.reliability:.2f} "
           f"→ {e_choice} (应 scratch) {'OK' if c_ok else 'FAIL'}")
 
-    # 6. 对比：有评估器 vs 无脑迁移（无脑在异构域被拖累）
-    #    有评估器：D 用迁移，E 用从头
-    sel_perf = (eval_policy(few_shot(src, "threat"), "threat") * 0.5
-                + eval_policy(few_shot(QTable(), "inverse"), "inverse") * 0.5)
+    # 6. 对比：有评估器（按选择器实际决策）vs 无脑迁移
+    #    有评估器：D 选 transfer→用迁移策略；E 选 scratch→用从头策略
+    d_pol = few_shot(src, "threat") if d_choice == "transfer" \
+        else few_shot(QTable(), "threat")
+    e_pol = few_shot(QTable(), "inverse") if e_choice == "scratch" \
+        else few_shot(src, "inverse")
+    sel_perf = eval_policy(d_pol, "threat") * 0.5 \
+        + eval_policy(e_pol, "inverse") * 0.5
     #    无脑迁移：都从域 A 迁移
     brainless = (eval_policy(few_shot(src, "threat"), "threat") * 0.5
                  + eval_policy(few_shot(src, "inverse"), "inverse") * 0.5)
     d_ok = sel_perf > brainless
-    print(f"[D] 对比: 有评估器 {sel_perf:.1f} vs 无脑迁移 {brainless:.1f} "
+    print(f"[D] 对比(按选择器输出): 有评估器 {sel_perf:.1f} "
+          f"(D={d_choice}, E={e_choice}) vs 无脑迁移 {brainless:.1f} "
           f"(应有评估器优) {'OK' if d_ok else 'FAIL'}")
 
     ok = a_ok and b_ok and c_ok and d_ok
