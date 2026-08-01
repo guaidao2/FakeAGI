@@ -118,7 +118,8 @@ class QTable:
         self.Q = {}
 
     def _key(self, obs):
-        return tuple(min(self.n_bins - 1, int(v * self.n_bins)) for v in obs)
+        # 负值钳制（防负桶索引——观测可能为负，如目标方向 (gx-x)/size）
+        return tuple(min(self.n_bins - 1, max(0, int(v * self.n_bins))) for v in obs)
 
     def _get(self, key):
         if key not in self.Q:
