@@ -20,6 +20,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+# 加速优化：AGI_QUIET=1 关 verbose 日志（不影响行为——仅 I/O 提速）
+_MOE_QUIET = os.environ.get("AGI_QUIET", "0") == "1"
+
+
+def _moe_log(msg):
+    if not _MOE_QUIET:
+        print(msg, flush=True)
+
 
 class Expert:
     """一个专家：专精一类情境"""
@@ -140,7 +148,7 @@ class MoERouter:
                    created_tick=self.tick)
         e.net.to(self.device)
         self.experts.append(e)
-        print(f"[MoE] 新专家 #{eid} 创建 (专家数={len(self.experts)})", flush=True)
+        _moe_log(f"[MoE] 新专家 #{eid} 创建 (专家数={len(self.experts)})")
         return eid
 
     def _retire_idle(self):
@@ -149,7 +157,7 @@ class MoERouter:
             if (self.tick - e.last_active_tick > self.retire_threshold
                     and len(self.experts) > 1):
                 self.experts.remove(e)
-                print(f"[MoE] 专家 #{e.id} 退役（长期未激活）", flush=True)
+                _moe_log(f"[MoE] 专家 #{e.id} 退役（长期未激活）")
 
     def get_action(self, activations: dict, state: np.ndarray) -> tuple:
         """
@@ -232,8 +240,8 @@ class MoERouter:
         """反序列化（校验维度一致性，不一致则显式告警）"""
         saved_state_dim = sd.get("state_dim", self.state_dim)
         if saved_state_dim != self.state_dim:
-            print(f"[MoE] 维度不匹配: 保存 state_dim={saved_state_dim} "
-                  f"vs 当前 {self.state_dim} — 专家网络将按当前维度重建", flush=True)
+            _moe_log(f"[MoE] 维度不匹配: 保存 state_dim={saved_state_dim} "
+                  f"vs 当前 {self.state_dim} — 专家网络将按当前维度重建")
         self.experts = []
         self.next_id = sd["next_id"]
         self.tick = sd["tick"]
@@ -245,7 +253,7 @@ class MoERouter:
                 try:
                     e.net.load_state_dict(es["net"])
                 except Exception as ex:
-                    print(f"[MoE] 专家 #{e.id} 权重恢复失败: {ex}", flush=True)
+                    _moe_log(f"[MoE] 专家 #{e.id} 权重恢复失败: {ex}")
             e.last_active_tick = es["last_active_tick"]
             e.activation_count = es["activation_count"]
             e.prediction_error = es["prediction_error"]

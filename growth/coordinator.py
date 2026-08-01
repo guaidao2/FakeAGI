@@ -23,7 +23,10 @@ import numpy as np
 
 
 class GrowthCoordinator:
-    def __init__(self, max_hidden: int = 256, log: bool = True):
+    def __init__(self, max_hidden: int = 256, log: bool = None):
+        if log is None:
+            # 加速优化：AGI_QUIET=1 默认关日志（不影响行为）
+            log = os.environ.get("AGI_QUIET", "0") != "1"
         self.max_hidden = max_hidden
         self.log = log
         self.modules = {}      # name -> {grow_fn, dim_fn, prune_fn, growth_count}

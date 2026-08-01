@@ -5,6 +5,7 @@ LNN 核心 (Liquid Time Constant Network)
 LTCell 具备自适应时间常数 τ，使其能处理不同时间尺度的时序模式。
 """
 
+import os
 import torch
 import torch.nn as nn
 import numpy as np
@@ -131,7 +132,8 @@ class LNN(nn.Module):
                 self.encoder.weight[row, :] = enc_vals * 0.1
         self.hidden_dim = new_h
         self.to(dev)
-        print(f"  [GROW] {old_h}→{new_h} hidden (+{n_new} 增量)", flush=True)
+        if os.environ.get("AGI_QUIET", "0") != "1":
+            print(f"  [GROW] {old_h}→{new_h} hidden (+{n_new} 增量)", flush=True)
     
     def grow_input(self, new_input_dim: int):
         """扩展感知输入维度（保留已有权重）"""
@@ -145,4 +147,5 @@ class LNN(nn.Module):
             w = min(new_input_dim, old_in)
             self.encoder.weight[:h, :w] = old_w[:h, :w]
         self.to(dev)
-        print(f"  [GROW_INPUT] {old_in}→{new_input_dim} dims", flush=True)
+        if os.environ.get("AGI_QUIET", "0") != "1":
+            print(f"  [GROW_INPUT] {old_in}→{new_input_dim} dims", flush=True)

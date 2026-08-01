@@ -5,9 +5,18 @@
   obs → encoder → LNN prev_hidden → world_model预测惊奇 → GameNN → action
 """
 
+import os
 import torch
 import numpy as np
 from cognition.temporal.lnn import LNN
+
+# 加速优化：AGI_QUIET=1 关 verbose 日志（不影响行为——仅 I/O 提速）
+_QUIET = os.environ.get("AGI_QUIET", "0") == "1"
+
+
+def _log(msg):
+    if not _QUIET:
+        print(msg, flush=True)
 from cognition.temporal.world_model import WorldModel
 from cognition.temporal.world_experts import MultiExpertWorldModel
 from cognition.learning.surprise import SurpriseComputer
@@ -201,7 +210,7 @@ class CognitionPipeline:
                 self.obs_dim = len(abstract_obs)
                 self.self_state_dim = len(self_state)
                 self.lnn.grow_input(len(combined))
-                print(f"  [GROW_PERCEPTION] input->{len(combined)}dim", flush=True)
+                _log(f"  [GROW_PERCEPTION] input->{len(combined)}dim")
             else:
                 combined = combined[:exp_dim] if len(combined) > exp_dim else np.pad(combined, (0, exp_dim - len(combined)))
         elif self.lnn.input_dim != len(combined):
@@ -412,7 +421,7 @@ class CognitionPipeline:
         self.gamenn.grow_state_dim(new_h)
         self.growth_cooldown = 500
         self._growth_losses = []
-        print(f"  [GROW#{self.growth_count}] {old_h}→{new_h} hidden", flush=True)
+        _log(f"  [GROW#{self.growth_count}] {old_h}→{new_h} hidden")
 
     def set_exploration_ratio(self, ratio: float):
         self.gamenn.epsilon = ratio

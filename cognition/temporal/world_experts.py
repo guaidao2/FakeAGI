@@ -10,8 +10,17 @@ P1b: 多专家世界模型 — 分情境预测
 - 路由：由 MoE 激活权重决定使用哪些头的加权预测
 """
 
+import os
 import torch
 import torch.nn as nn
+
+# 加速优化：AGI_QUIET=1 关 verbose 日志（不影响行为——仅 I/O 提速）
+_WE_QUIET = os.environ.get("AGI_QUIET", "0") == "1"
+
+
+def _we_log(msg):
+    if not _WE_QUIET:
+        print(msg, flush=True)
 
 
 class ExpertWorldHead(nn.Module):
@@ -50,7 +59,7 @@ class MultiExpertWorldModel(nn.Module):
         """确保预测头数量与 MoE 专家数一致（新专家 → 新预测头）"""
         while len(self.heads) < min(n_experts, self.max_experts):
             self.heads.append(ExpertWorldHead(self.input_dim))
-            print(f"[WorldExperts] 新预测头 #{len(self.heads)-1} 创建", flush=True)
+            _we_log(f"[WorldExperts] 新预测头 #{len(self.heads)-1} 创建")
 
     def _encode(self, h: torch.Tensor, action: torch.Tensor = None) -> torch.Tensor:
         if action is None:
