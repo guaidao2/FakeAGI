@@ -205,6 +205,9 @@ def main():
     seeds = (42, 7, 2026)
     rows = []
     for s in seeds:
+        np.random.seed(s)          # 每 seed 独立重置（security low：
+        torch.manual_seed(s)       # 原仅 main 开头 seed，AGI 初始化依赖
+        # 全局状态延续→seed 循环顺序影响结果；对齐 ① 每 seed 双重置）
         soc = run_social(seed=s)
         single = run_single(seed=s)
         rows.append((s, soc, single))
