@@ -7,7 +7,9 @@
 > - ✅ P4 叠加态世界模型：已实现（`cognition/temporal/superposition_world.py`）
 > - ✅ P6 器官生长：已实现（`cognition/perception/`，`test_organ_gen.py` 通过）
 > - ✅ P7/P8a/P8b 语言：接地/生存/意图已实现（`cognition/language/`）
-> - ⏳ P8c 句法：待实现
+> - ✅ P8c 句法：已实现（`cognition/language/syntax.py`，`test_syntax.py` 通过）
+> - ✅ ③ 情绪+他者接入主循环：已实现（`main.py`，`test_integration_emotion_other.py`）
+> - ✅ ④ 跨域迁移：已实现（`core/cross_domain.py`，`test_cross_domain.py` 通过）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
