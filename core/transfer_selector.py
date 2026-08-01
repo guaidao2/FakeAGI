@@ -45,22 +45,27 @@ class TransferabilityEstimator:
         幅度加权：性能差越大更新越强（赢 4.5 倍 vs 平局更新幅度不同）"""
         if self.frozen:
             return
-        # 归一化性能差（0-1 加权系数）
-        if scratch_perf > 0:
-            ratio = migrated_perf / scratch_perf
-            if ratio >= 1.05:
-                strength = min(1.0, (ratio - 1.0) * 0.5)  # 赢越多越强
-                success = True
-            elif ratio <= 0.95:
-                strength = min(1.0, (1.0 - ratio) * 0.5)  # 输越多越强
-                success = False
-            else:
-                # 平局（±5% 内）：迁移无优势=不值得迁移——中等强度降
-                strength = 0.4
-                success = False
+        # NaN/Inf 防御：非有限性能输入静默按失败处理（防污染权重）
+        if not (np.isfinite(migrated_perf) and np.isfinite(scratch_perf)):
+            success = False
+            strength = 0.05
         else:
-            success = migrated_perf > 0
-            strength = 0.3
+            # 归一化性能差（0-1 加权系数）
+            if scratch_perf > 0:
+                ratio = migrated_perf / scratch_perf
+                if ratio >= 1.05:
+                    strength = min(1.0, (ratio - 1.0) * 0.5)  # 赢越多越强
+                    success = True
+                elif ratio <= 0.95:
+                    strength = min(1.0, (1.0 - ratio) * 0.5)  # 输越多越强
+                    success = False
+                else:
+                    # 平局（±5% 内）：迁移无优势=不值得迁移——中等强度降
+                    strength = 0.4
+                    success = False
+            else:
+                success = migrated_perf > 0
+                strength = 0.3
         if strength < 0.05:
             strength = 0.05  # 最小更新（平局也轻微更新）
         # 似然：假设 h 下观测到成功/失败的概率，按幅度加权
