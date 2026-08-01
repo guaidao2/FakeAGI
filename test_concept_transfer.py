@@ -168,40 +168,48 @@ def main():
           f"(双域应>2x) {'OK' if a_ok else 'FAIL'}")
 
     # B. 零样本概念迁移（果实——第三种表面，训练从未见过 0.8）
-    b_fruit = eval_policy(agent, "fruit", trials=50)
-    r_fruit = eval_policy(LinearQ(), "fruit", trials=50, random_baseline=True)
-    b_ok = b_fruit > r_fruit * 2
-    print(f"[B] 零样本概念迁移: 果实 {b_fruit}/50 vs 真随机 {r_fruit}/50 "
-          f"(应>2x——概念抽象) {'OK' if b_ok else 'FAIL'}")
+    #    固定先验阈值（≥40/50=80%）而非相对 2x——防随机基线波动导致
+    #    结构性不可达/过松（review should-fix）
+    #    多 seed 重复（3 seeds）——最差 seed 也须过（防单 seed 运气）
+    b_results = []
+    for s in (42, 7, 2026):
+        np.random.seed(s)
+        # eval env seed 随 s 变化（500+s）——每 seed 用不同评估布局集，
+        # 三次 b_fruit 独立（security low：原固定 500 只抖动基线）
+        b_fruit = eval_policy(agent, "fruit", trials=50, seed=500 + s)
+        r_fruit = eval_policy(LinearQ(), "fruit", trials=50,
+                              seed=500 + s, random_baseline=True)
+        b_results.append((b_fruit, r_fruit))
+    b_min = min(x[0] for x in b_results)
+    b_ok = b_min >= 40
+    detail = ", ".join(f"seed{s}: {x[0]}/{x[1]}" for s, x in
+                       zip((42, 7, 2026), b_results))
+    print(f"[B] 零样本概念迁移(×3seeds): {detail} "
+          f"(最差≥40/50=80%) {'OK' if b_ok else 'FAIL'}")
 
     # C. 少样本适配（fruit 30ep 迁移 vs 从头）
-    agent_few = LinearQ()
-    agent_few.theta = agent.theta.copy()
-    for ep in range(30):
-        env = ConceptEnv(size=6, mode="fruit", seed=100 + ep)
-        obs = env.observe()
-        for _ in range(40):
-            a = agent_few.act(obs)
-            r, done = env.step(a)
-            obs_next = env.observe()
-            agent_few.learn(obs, a, r, obs_next, done)
-            obs = obs_next
-            if done:
-                break
-    c_mig = eval_policy(agent_few, "fruit", trials=50)
+    #    两者 eps 同衰减（0.3→0.05）——公平比较（review nit：原恒 0.3 高探索削弱比较）
+    def finetune(init_theta=None, seed0=100):
+        ag = LinearQ()
+        if init_theta is not None:
+            ag.theta = init_theta.copy()
+        for ep in range(30):
+            env = ConceptEnv(size=6, mode="fruit", seed=seed0 + ep)
+            obs = env.observe()
+            for _ in range(40):
+                a = ag.act(obs)
+                r, done = env.step(a)
+                obs_next = env.observe()
+                ag.learn(obs, a, r, obs_next, done)
+                obs = obs_next
+                if done:
+                    break
+            ag.eps = max(0.05, ag.eps * 0.998)
+        return ag
 
-    agent_scratch = LinearQ()
-    for ep in range(30):
-        env = ConceptEnv(size=6, mode="fruit", seed=100 + ep)
-        obs = env.observe()
-        for _ in range(40):
-            a = agent_scratch.act(obs)
-            r, done = env.step(a)
-            obs_next = env.observe()
-            agent_scratch.learn(obs, a, r, obs_next, done)
-            obs = obs_next
-            if done:
-                break
+    agent_few = finetune(init_theta=agent.theta)
+    c_mig = eval_policy(agent_few, "fruit", trials=50)
+    agent_scratch = finetune(init_theta=None)
     c_scratch = eval_policy(agent_scratch, "fruit", trials=50)
     c_ok = c_mig > c_scratch
     print(f"[C] 少样本适配(30ep): 迁移 {c_mig}/50 vs 从头 {c_scratch}/50 "
@@ -215,9 +223,16 @@ def main():
           f"(<0.3=抽象成功忽略表面) {'OK' if d_ok else 'FAIL'}")
 
     ok = b_ok  # 判定只看 B（A/C/D 如实记录）
-    print(f"\n判定: {'OK 通过——第三种表面零样本迁移成立（概念抽象）' if ok else 'FAIL'}")
+    # 结论强度条件化：D 通过才声称"概念抽象（丢弃表面）"；
+    # D 未过（外观权重未收敛）则降级"跨表面泛化（机制未明）"——review should-fix
+    if ok:
+        conclusion = ("概念抽象（丢弃表面）" if d_ok
+                      else "跨表面泛化（机制未明——外观权重未收敛）")
+    else:
+        conclusion = "不成立"
+    print(f"\n判定: {'OK 通过——第三种表面零样本迁移成立（' + conclusion + '）' if ok else 'FAIL'}")
     print(f"  [诚实报告] A 食物 {a_food} vs {r_food}、水源 {a_water} vs {r_water}"
-          f"/ B 果实 {b_fruit} vs {r_fruit}"
+          f"/ B {detail}"
           f"/ C 少样本 {c_mig} vs {c_scratch}"
           f"/ D 外观权重 {w_app_norm:.3f}")
     return 0 if ok else 1
