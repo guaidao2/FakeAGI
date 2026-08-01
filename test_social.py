@@ -353,7 +353,10 @@ def main():
         print("  社会感知贡献：他者模型激活显著增加冲突（感知驱动竞争）")
     else:
         print("  社会感知贡献：他者模型无显著影响（冲突主要来自环境机制）")
-    print(f"\n总体: {'OK（全部配置有效）' if all_ok else 'FAIL（有配置无效）'}")
+
+    if not valid:
+        all_ok = False  # 有效性 FAIL 也反映在退出码（nit：假说无法检验）
+    print(f"\n总体: {'OK（全部配置有效）' if all_ok else 'FAIL（有配置无效/不可检验）'}")
     return 0 if all_ok else 1
 
 
