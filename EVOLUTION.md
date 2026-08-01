@@ -1,6 +1,6 @@
 # EVOLUTION — 进化架构设计：MoE 专家路由 + 经验 DNA 跨代
 
-> 状态：**部分实现**（2025-08-01）
+> 状态：**部分实现**（2026-08-01）
 > - ✅ P1 MoE 专家路由：已实现（`cognition/decision/moe_router.py`，`test_moe.py` 通过）
 > - ✅ P2 经验 DNA：已实现（`core/dna.py`）
 > - ✅ P3 种群演化：已实现（`test_evolution.py`）
@@ -191,7 +191,7 @@ session 结束（死亡/主动保存）
 
 ---
 
-## 6. 实现路线（当前进度 2025-07-31）
+## 6. 实现路线（当前进度 2026-07-31）
 
 - [x] **P0：checkpoint 持久化**（`core/persistence.py`）— LNN/WM/GameNN/价值/空间记忆/概念库/MoE，维度恢复
 - [x] **P1：MoE 路由器**（`cognition/decision/moe.py`）— 情境路由、专家创建/退役、在线学习
