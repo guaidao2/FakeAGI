@@ -17,3 +17,4 @@ test_results.txt
 *.txt
 experience_dna.json
 checkpoints/
+results/
