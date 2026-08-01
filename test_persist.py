@@ -44,8 +44,12 @@ def test():
     s1 = agi1.survival_ticks
     c1 = agi1.cognition.confidence if agi1.cognition else 0.0
     v1 = dict(agi1.value_system.secondary_values.get("food", {}))
+    # 睡眠恢复断言（review should-fix：200 tick 疲劳 0.005×200=1.0>0.7
+    # 必已触发睡眠——保存时应在睡，加载后必须仍在睡）
+    sleep1 = bool(agi1.body.is_sleeping)
     path = agi1.save(tag="test")
-    print(f"  保存: tick={t1} survival={s1} conf={c1:.3f} food_val={v1.get('value', 0):.2f}")
+    print(f"  保存: tick={t1} survival={s1} conf={c1:.3f} "
+          f"food_val={v1.get('value', 0):.2f} sleeping={sleep1}")
     
     # 第二个生命：加载
     agi2 = AGI()
@@ -59,19 +63,23 @@ def test():
     s2 = agi2.survival_ticks
     c2 = agi2.cognition.confidence if agi2.cognition else 0.0
     v2 = dict(agi2.value_system.secondary_values.get("food", {}))
-    print(f"  加载: tick={t2} survival={s2} conf={c2:.3f} food_val={v2.get('value', 0):.2f}")
+    sleep2 = bool(agi2.body.is_sleeping)
+    print(f"  加载: tick={t2} survival={s2} conf={c2:.3f} "
+          f"food_val={v2.get('value', 0):.2f} sleeping={sleep2}")
     
     # 判定
     tick_ok = t1 == t2
     surv_ok = s1 == s2
     val_ok = abs(v1.get("value", 0) - v2.get("value", 0)) < 0.01
-    print(f"  tick一致: {tick_ok}, survival一致: {surv_ok}, 价值一致: {val_ok}")
+    sleep_ok = sleep1 == sleep2
+    print(f"  tick一致: {tick_ok}, survival一致: {surv_ok}, "
+          f"价值一致: {val_ok}, 睡眠一致: {sleep_ok}")
     
-    if ok and tick_ok and surv_ok and val_ok:
-        print("判定: OK 通过 — checkpoint 持久化完整")
+    if ok and tick_ok and surv_ok and val_ok and sleep_ok:
+        print("判定: OK 通过 — checkpoint 持久化完整（含睡眠状态）")
     else:
         print("判定: NO 失败 — 状态未完整恢复")
-    return ok and tick_ok and surv_ok and val_ok
+    return ok and tick_ok and surv_ok and val_ok and sleep_ok
 
 if __name__ == "__main__":
     test()

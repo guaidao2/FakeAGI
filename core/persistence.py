@@ -163,10 +163,13 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
     try:
         data = torch.load(path, map_location="cpu", weights_only=True)
     except Exception as e:
-        # 旧档/含非标准对象（value_system 等）weights_only 失败——
-        # 回退完整反序列化（本地自产 checkpoint 信任源；警告明确，
-        # 纵深防御优先 weights_only，回退仅作兼容）
-        print(f"[PERSIST] weights_only 加载失败: {e}")
+        # 仅"weights_only 拒绝"类异常才回退（旧档/含非标准对象）——
+        # 其他异常（文件损坏等）直接失败，不扩大回退面
+        # （review should-fix：无差别回退让攻击者以投毒 checkpoint 达 pickle RCE 面）
+        if "Weights only load failed" not in str(e):
+            print(f"[PERSIST] checkpoint 加载失败: {e}")
+            return False
+        print(f"[PERSIST] weights_only 拒绝（旧档非标准对象）: {e}")
         print("[PERSIST] 回退完整加载（本地信任源）")
         data = torch.load(path, map_location="cpu", weights_only=False)
 
