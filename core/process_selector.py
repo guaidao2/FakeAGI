@@ -94,6 +94,13 @@ class SuperpositionEstimator:
         """加权期望可靠性（坍缩后）"""
         return float(np.dot(self.weights, self.hypotheses))
 
+    @reliability.setter
+    def reliability(self, value: float):
+        """测试/场景注入：单值→对应假设权重分布（贴近 value 的假设权重升）"""
+        dist = np.abs(self.hypotheses - value)
+        self.weights = np.exp(-dist * 8.0)
+        self.weights /= self.weights.sum()
+
     def update(self, success: bool):
         """观测坍缩：成功→高假设权重升；失败→低假设权重升（贝叶斯）
         带置信度地板（Dirichlet 先验）——每个假设保留最小权重，
