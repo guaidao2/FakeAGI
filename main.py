@@ -129,27 +129,46 @@ class AGI:
         # ⑥ 默认关闭（_transfer_selector_enabled=True 时启用）
         if not getattr(self, '_transfer_selector_enabled', False):
             return
-        # 环境切换检测（首次设置不算切换）
+        # 环境切换检测（首次设置不算切换；仅 domain 变化才算——同域重设不算）
         if old_env is None:
+            self._last_domain = type(env).__name__
             return
+        new_domain = type(env).__name__
+        if new_domain == getattr(self, '_last_domain', None):
+            return  # 同域重设（关卡重启等）不触发迁移决策
+        self._last_domain = new_domain
         try:
             if self.transfer_selector is None:
                 from core.transfer_selector import TransferSelector
                 self.transfer_selector = TransferSelector(min_reliability=0.60)
             # 新域 ID：环境类型名（迷宫/自由/共享等）
-            new_domain = type(env).__name__
             choice = self.transfer_selector.choose(new_domain)
             self.transfer_choice = choice
             if choice == "scratch" and self.cognition is not None \
                     and hasattr(self.cognition, 'gamenn'):
-                # 从头学：重置 GameNN Q 网络（丢弃旧域经验）
+                # 从头学：重置 GameNN（丢弃旧域经验）
+                # 必须同步重建 optimizers（否则 optimizer 仍绑定旧参数，无法学习）
                 g = self.cognition.gamenn
                 g.q_nets = [type(g.q_nets[0])(g.state_dim, g.n_actions).to(g.device)
                             for _ in range(g.n_strategies)]
+                import torch  # 局部导入（main.py 顶层无 torch）
+                g.optimizers = [torch.optim.AdamW(q.parameters(), lr=g.lr)
+                                for q in g.q_nets]
                 g.strategy_weights = np.ones(g.n_strategies) / g.n_strategies
+                # 清状态缓存（防旧域污染新域置信度/策略演化）
+                if hasattr(g, 'strategy_update_counts'):
+                    g.strategy_update_counts = [0] * g.n_strategies
+                if hasattr(g, 'strategy_scores'):
+                    g.strategy_scores = [0.0] * g.n_strategies
+                if hasattr(g, 'strategy_counts'):
+                    g.strategy_counts = [0] * g.n_strategies
+                if hasattr(g, 'game_matrix'):
+                    g.game_matrix = np.zeros((g.n_strategies, g.n_actions))
                 self.transfer_feedback_tick = self.tick  # 记录反馈起点
-        except Exception:
-            pass  # 容错：迁移评估异常不阻塞环境切换
+        except Exception as e:
+            # 容错：迁移评估异常不阻塞环境切换（记录便于诊断）
+            if getattr(self, '_transfer_debug', False):
+                print(f"[transfer-debug] set_env 异常: {e}")
     
     # ─── P0: Checkpoint 持久化（跨 session 身份连续性） ───
     def save(self, tag: str = "latest", path: str = None) -> str:
@@ -623,15 +642,26 @@ class AGI:
             if (getattr(self, '_transfer_selector_enabled', False)
                     and self.transfer_selector is not None
                     and self.transfer_choice is not None
-                    and self.tick - getattr(self, 'transfer_feedback_tick', 0) == 500
+                    and self.tick - getattr(self, 'transfer_feedback_tick', 0) >= 500
                     and hasattr(self.cognition, 'gamenn')):
                 try:
                     # 性能信号：GameNN 置信度（学到策略的程度）
                     perf = self.cognition.gamenn.get_confidence()
-                    # 与"从头学基线"对比：迁移组置信度应更高（同构时）
-                    # 简化：用固定基线 0.15（低置信=从头水平）——真实对比需对照组
+                    # 基线：0.15 = 重置后初始置信度水平（从头学基准，实测标定）
+                    # 迁移组若 > 基线 → 迁移有用；否则迁移无优势
                     self.transfer_selector.observe_feedback(perf, 0.15)
                     self.transfer_feedback_tick = self.tick
+                except Exception:
+                    pass
+            # 死锁保护：可靠性过低且长时间未迁移 → 强制试探一次迁移（防永锁 scratch）
+            if (getattr(self, '_transfer_selector_enabled', False)
+                    and self.transfer_selector is not None
+                    and self.transfer_choice == "scratch"
+                    and self.tick % 3000 == 0
+                    and getattr(self, '_transfer_probe_tick', -9999) < self.tick - 1000):
+                try:
+                    self.transfer_selector.choose("probe_" + str(self.tick))
+                    self._transfer_probe_tick = self.tick
                 except Exception:
                     pass
             

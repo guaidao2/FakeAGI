@@ -46,6 +46,11 @@ class SimpleEnv:
         return False
 
 
+class SimpleEnv2(SimpleEnv):
+    """不同域类型（用于切换检测验证——同域重设不算切换）"""
+    pass
+
+
 def make_agi():
     cfg = {
         "input_dim": 4, "self_state_dim": 14,
@@ -73,29 +78,34 @@ def main():
     print(f"\n[A] 默认关闭: selector={agi.transfer_selector} 权重未动 "
           f"{'OK' if a_ok else 'FAIL'}")
 
-    # B. 开启后：首次 set_env 不触发（无 old_env），第二次触发
+    # B. 开启后：首次 set_env 不触发（无 old_env），跨域切换触发
     agi2 = make_agi()
     agi2._transfer_selector_enabled = True
     agi2.set_env(SimpleEnv())  # 首次：不算切换
     b1 = agi2.transfer_selector is None
-    agi2.set_env(SimpleEnv())  # 第二次：切换触发
+    agi2.set_env(SimpleEnv2())  # 跨域：切换触发
     b2 = agi2.transfer_selector is not None
-    b_ok = b1 and b2
-    print(f"[B] 切换检测: 首次后 selector={agi2.transfer_selector if not b1 else 'None(正确)'} "
-          f"二次后={agi2.transfer_selector is not None} "
+    # 同域重设：不算切换（selector 保持）
+    agi2.set_env(SimpleEnv2())
+    b3 = agi2.transfer_selector is not None and agi2.transfer_choice is not None
+    b_ok = b1 and b2 and b3
+    print(f"[B] 切换检测: 首次后 None={b1} 跨域触发={b2} 同域重设保留={b3} "
           f"{'OK' if b_ok else 'FAIL'}")
 
-    # C. scratch 决策：可靠性低（<0.60）→ 切换后 GameNN 重置
+    # C. scratch 决策：可靠性低（<0.60）→ 切换后 GameNN 重置（含 optimizers 重建）
     agi3 = make_agi()
     agi3._transfer_selector_enabled = True
     agi3.set_env(SimpleEnv())
     # 初始可靠性 0.5 < 0.60 → scratch
     w_before = list(agi3.cognition.gamenn.q_nets[0].parameters())[0].data.clone()
-    agi3.set_env(SimpleEnv())
+    opt_before = agi3.cognition.gamenn.optimizers[0]
+    agi3.set_env(SimpleEnv2())
     w_after = list(agi3.cognition.gamenn.q_nets[0].parameters())[0].data.clone()
-    c_ok = agi3.transfer_choice == "scratch" and not torch_equal(w_before, w_after)
-    print(f"[C] scratch执行: choice={agi3.transfer_choice}, 权重已重置 "
-          f"{'OK' if c_ok else 'FAIL'}")
+    opt_after = agi3.cognition.gamenn.optimizers[0]
+    c_ok = (agi3.transfer_choice == "scratch" and not torch_equal(w_before, w_after)
+            and opt_after is not opt_before)  # optimizers 必须重建（复审 blocking）
+    print(f"[C] scratch执行: choice={agi3.transfer_choice}, 权重重置={not torch_equal(w_before, w_after)}, "
+          f"optimizer重建={opt_after is not opt_before} {'OK' if c_ok else 'FAIL'}")
 
     # D. 迁移决策：高可靠性（≥0.60）→ 保留权重
     agi4 = make_agi()
@@ -108,7 +118,7 @@ def main():
     agi4.transfer_selector = sel
     agi4.set_env(SimpleEnv())  # 首次：不算切换
     w_b4 = list(agi4.cognition.gamenn.q_nets[0].parameters())[0].data.clone()
-    agi4.set_env(SimpleEnv())  # 第二次：切换触发决策
+    agi4.set_env(SimpleEnv2())  # 跨域：切换触发决策
     w_a4 = list(agi4.cognition.gamenn.q_nets[0].parameters())[0].data.clone()
     d_ok = agi4.transfer_choice == "transfer" and torch_equal(w_b4, w_a4)
     print(f"[D] 迁移执行: choice={agi4.transfer_choice}, 权重保留 "
@@ -119,7 +129,7 @@ def main():
     agi5._transfer_selector_enabled = True
     try:
         agi5.set_env(SimpleEnv())
-        agi5.set_env(SimpleEnv())
+        agi5.set_env(SimpleEnv2())
         e_ok = True
     except Exception as ex:
         e_ok = False
