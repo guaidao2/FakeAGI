@@ -670,7 +670,7 @@ class AGI:
                         "probe_" + str(self.tick))
                     if probe_choice == "transfer":
                         self.transfer_choice = "transfer"
-                        self._transfer_probe_tick = self.tick
+                    self._transfer_probe_tick = self.tick  # 无条件更新（防重复 probe）
                 except Exception:
                     pass
             
