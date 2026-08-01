@@ -148,7 +148,7 @@ def load_checkpoint(agi, path: str = None, tag: str = "latest") -> bool:
         return False
 
     try:
-        data = torch.load(path, map_location="cpu", weights_only=False)
+        data = torch.load(path, map_location="cpu", weights_only=True)
     except Exception as e:
         print(f"[PERSIST] checkpoint 加载失败: {e}")
         return False

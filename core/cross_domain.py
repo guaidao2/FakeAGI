@@ -101,6 +101,13 @@ class CrossDomainTransfer:
             return w
         xs = np.atleast_2d(np.array([s[0] for s in samples], dtype=float))
         ys = np.atleast_2d(np.array([s[1] for s in samples], dtype=float))
+        # NaN/Inf 过滤：非有限样本在 lstsq 前剔除（防 NaN 传播进 _top_adapter）
+        finite = np.isfinite(xs).all(axis=1) & np.isfinite(ys).all(axis=1)
+        if not np.all(finite):
+            xs = xs[finite]
+            ys = ys[finite]
+        if len(xs) == 0:
+            return w
         # 用迁移后的底层（W_h 若存在）做特征投影
         features = xs
         if "W_h" in w:
