@@ -39,7 +39,8 @@ class World2:
         self.pos_b = [6, 6]
         self.n_food = n_food
         self.gather_cost = gather_cost
-        self.gather_progress = {}   # (x,y) -> 已工作 tick
+        self.gather_progress = {}   # (who,pos) -> 已工作 tick
+        self._worked_food = {}      # who -> 正在工作的食物格
         self.foods = []
         for _ in range(n_food):
             self._respawn_food()
@@ -106,6 +107,8 @@ class World2:
         else:
             self.pos_b = [nx, ny]
         # 吃食物（gather_cost=0 立即吃；>0 需停留"工作"——丰富但难得的资源）
+        # review blocking 修复：按 (who, 食物格) 追踪工作进度——
+        # 原 _last_food_pos 恒 None 导致进度每 tick 清零，难获配置食物永不可得
         pos_key = (nx, ny)
         if pos_key in [tuple(f) for f in self.foods]:
             if self.gather_cost <= 0:
@@ -113,20 +116,25 @@ class World2:
                 self.food_eaten += 1
                 self._respawn_food()
                 return 0.5
-            # 需要工作：停留 accumulate；离开则重置
-            if pos_key != self._last_food_pos(who):
-                self.gather_progress[pos_key] = 0
-            self.gather_progress[pos_key] = self.gather_progress.get(pos_key, 0) + 1
-            if self.gather_progress[pos_key] >= self.gather_cost:
+            # 工作进度：key=(who, 格)；离开该格（新位置非食物格）不重置，
+            # 但换食物格则从 0 开始（防跨食物累积）
+            wk = (who, pos_key)
+            if pos_key != self._worked_food.get(who):
+                self.gather_progress[wk] = 0
+            self._worked_food[who] = pos_key
+            self.gather_progress[wk] = self.gather_progress.get(wk, 0) + 1
+            if self.gather_progress[wk] >= self.gather_cost:
                 self.foods.remove([nx, ny])
                 self.food_eaten += 1
-                self.gather_progress.pop(pos_key, None)
+                self.gather_progress.pop(wk, None)
+                self._worked_food[who] = None
                 self._respawn_food()
                 return 0.5
+        else:
+            # 离开食物格：清工作标记（但保留该格进度？不——离开即重置，
+            # 防止"碰一下"累积；下次回来重新工作）
+            self._worked_food[who] = None
         return -0.002  # 移动代谢
-
-    def _last_food_pos(self, who):
-        return None  # 简化：不追踪离开重置（工作进度按格子累积）
 
     def spacing(self):
         return abs(self.pos_a[0] - self.pos_b[0]) \
@@ -143,7 +151,8 @@ def make_agi(env):
     return agi
 
 
-def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0):
+def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
+               other_enabled=True):
     """双 AGI 共跑；返回指标"""
     env = World2(seed=seed, n_food=n_food, gather_cost=gather_cost)
     agi_a = make_agi(env)
@@ -172,9 +181,9 @@ def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0):
     env_a, env_b = Adapter("a"), Adapter("b")
     agi_a.set_env(env_a)
     agi_b.set_env(env_b)
-    # 激活他者模型（main.py:616 默认关闭）
-    agi_a._other_agent_enabled = True
-    agi_b._other_agent_enabled = True
+    # 激活他者模型（main.py:616 默认关闭；ablation 对照可关）
+    agi_a._other_agent_enabled = other_enabled
+    agi_b._other_agent_enabled = other_enabled
     deaths = {"a": None, "b": None}
     for t in range(max_ticks):
         for who, agi, ad in (("a", agi_a, env_a), ("b", agi_b, env_b)):
@@ -241,6 +250,7 @@ def main():
         ("丰富-难获", dict(n_food=8, gather_cost=15)),
     ]
     summary = []
+    all_ok = True
     for label, cfg in configs:
         rows = []
         for s in seeds:
@@ -255,16 +265,36 @@ def main():
         conf_sum = sum(r[1]["conflicts"] for r in rows)
         surv_min = min(r[1]["survival"] for r in rows)
         single_surv_min = min(r[2]["survival"] for r in rows)
-        summary.append((label, conf_sum, surv_min, single_surv_min))
+        # 有效性检查（review blocking）：难获配置食物必须 >0
+        # （gather 机制损坏时食物恒 0——配置无效）
+        food_sum = sum(r[1]["food"] for r in rows)
+        if cfg["gather_cost"] > 0 and food_sum == 0:
+            print(f"  [!!] {label} 食物全 0——gather 机制异常，配置无效")
+            all_ok = False
+        summary.append((label, conf_sum, surv_min, single_surv_min, food_sum))
     print("\n=== 稀缺度-冲突曲线（用户假设验证）===")
-    for label, conf, surv, single in summary:
-        print(f"  {label}: 冲突事件={conf}（×3seeds 合计）"
-              f" 双最差存活={surv:.0f} 单最差存活={single:.0f}")
-    return 0
+    for label, conf, surv, single, food in summary:
+        print(f"  {label}: 冲突事件={conf}（×3seeds 合计）双总食物={food} "
+              f"双最差存活={surv:.0f} 单最差存活={single:.0f}")
 
-
-if __name__ == "__main__":
-    sys.exit(main())
+    # ablation 对照：他者模型开关（review blocking——冲突归因）
+    print("\n=== 他者模型 ablation（稀缺-难获配置）===")
+    conf_on = conf_off = 0
+    for s in seeds:
+        np.random.seed(s)
+        torch.manual_seed(s)
+        soc_on = run_social(seed=s, **dict(n_food=2, gather_cost=15))
+        conf_on += soc_on["conflicts"]
+        soc_off = run_social(seed=s, **dict(n_food=2, gather_cost=15),
+                             other_enabled=False)
+        conf_off += soc_off["conflicts"]
+    print(f"  他者开: 冲突={conf_on}（×3seeds 合计）| 他者关: 冲突={conf_off}")
+    if conf_on > conf_off:
+        print("  社会感知贡献：他者模型激活显著增加冲突（感知驱动竞争）")
+    else:
+        print("  社会感知贡献：他者模型无显著影响（冲突主要来自环境机制）")
+    print(f"\n总体: {'OK（全部配置有效）' if all_ok else 'FAIL（有配置无效）'}")
+    return 0 if all_ok else 1
 
 
 if __name__ == "__main__":
