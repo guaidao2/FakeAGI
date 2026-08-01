@@ -16,8 +16,13 @@
       外观扰动不敏感：同状态外观 ±0.1，argmax 动作不变率 ≥ 95%
       （比权重更本质：测"表面无关性"的行为表现）
   - 判定：B（零样本 ≥40/50，3 独立训练 seeds 取最差）+ D（≥95%）
-  - 3 seeds 独立训练（np.random.seed(s)）+ 评估布局完全分离（500+s*1000）
-  - 随机基线配对公平
+  - 3 seeds 独立训练（np.random.seed(s) + 训练布局 seed=s + 评估布局 500+s*1000
+    + 扰动布局 3000+s*1000 全分离）
+  - 组2 同量对照（4 表面×125ep = 500ep = 组1 2表面×250ep）——消除训练量混淆
+  - 组3 内插对照（2 表面→0.65 内插，同组1 量）——消除外推/内插混淆：
+    组2 vs 组3 同为内插（仅表面数不同）→ 组2 优势可归因于表面多样性
+  - 局限（如实记录）：无 target network 的 DQN 自举不稳定；
+    D 为单幅度行为学测试（必要不充分）
 """
 import sys, os
 import numpy as np
@@ -151,8 +156,10 @@ def eval_policy(agent, mode, trials=50, max_steps=40, seed=500, train=False,
     return reached
 
 
-def perturbation_invariance(agent, mode, trials=50, seed=900):
-    """D 判定：外观扰动 ±0.1 下 argmax 不变率（行为学表面无关性）"""
+def perturbation_invariance(agent, mode, trials=50, seed=3000):
+    """D 判定：外观扰动 ±0.1 下 argmax 不变率（行为学表面无关性）
+    局限（review nit）：单幅度 ±0.1、行为学必要不充分（权重依赖大但
+    argmax 不翻转也过）——报告中注明"""
     invariant = 0
     total = 0
     for t in range(trials):
@@ -178,22 +185,28 @@ def main():
     print("=" * 60)
     seeds = (42, 7, 2026)
 
-    for group, train_modes, test_mode, label in (
-        (1, ("food", "water"), "fruit", "组1: 2表面→第3表面(可比路线B)"),
-        (2, ("food", "water", "fruit", "mushroom"), "berry",
-         "组2: 4表面→第5表面(鲁棒性)"),
+    for group, train_modes, test_mode, ep_per, label in (
+        (1, ("food", "water"), "fruit", 250,
+         "组1: 2表面×250ep=500ep→0.8(外推)"),
+        (2, ("food", "water", "fruit", "mushroom"), "berry", 125,
+         "组2: 4表面×125ep=500ep(同量)→0.65(内插)"),
+        (3, ("food", "mushroom"), "berry", 250,
+         "组3: 2表面×250ep=500ep→0.65(内插对照!)"),
     ):
         print(f"\n--- {label} ---")
         rows = []
         for s in seeds:
             np.random.seed(s)
             torch.manual_seed(42 + s)
-            agent = train_multi(train_modes, episodes_per=250, seed=0)
+            # 训练布局随 seed 独立（review should-fix：原 seed=0 三组共享布局）
+            agent = train_multi(train_modes, episodes_per=ep_per, seed=s)
             es = 500 + s * 1000
             b = eval_policy(agent, test_mode, trials=50, seed=es)
             r = eval_policy(MLPQ(), test_mode, trials=50, seed=es,
                             random_baseline=True)
-            inv = perturbation_invariance(agent, test_mode, trials=50)
+            # 扰动测试布局完全分离（review should-fix：原 900 与组2训练布局重叠）
+            inv = perturbation_invariance(agent, test_mode, trials=50,
+                                          seed=3000 + s * 1000)
             rows.append((s, b, r, inv))
         b_min = min(x[1] for x in rows)
         b_ok = b_min >= 40
