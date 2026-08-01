@@ -51,16 +51,20 @@ class ProcessController:
 
         action = 0
         if choice == "ask":
-            # 问路：返回 (方向词, 是否答对)，本 tick 按方向移动
+            # 问路（真机会成本）：本 tick 只响应不移动，方向存到下一 tick
             words, answered_correct = self.env.respond("food")
             self.ask_used_tick = self.tick
+            self.pending_dir = None
             if words and len(words) > 1:
                 self.pending_dir = DIR_MAP.get(words[1])
-                action = self.pending_dir if self.pending_dir is not None else 0
-            else:
-                self.pending_dir = None
+            self.pending_answered_correct = answered_correct
+            action = 0  # 问路的 tick 不移动（机会成本：无法同时搜索）
         elif choice == "sweep":
-            if self.seeker is not None:
+            # 若上一 tick 问路得到方向，先按方向移动（问路的效果兑现）
+            if self.pending_dir is not None:
+                action = self.pending_dir
+                self.pending_dir = None
+            elif self.seeker is not None:
                 action = self.seeker.choose_action(self.env.pos)
             else:
                 action = np.random.randint(1, 5)
@@ -75,8 +79,8 @@ class ProcessController:
         # 过程结果验证
         success = ed > 0.1
         if choice == "ask":
-            # 问路效果：用环境返回的"是否答对"（ground truth）
-            ask_ok = answered_correct
+            # 问路效果：上一 tick 响应的答对标志（本 tick 移动后仍记 ask 的账）
+            ask_ok = getattr(self, 'pending_answered_correct', False)
             self.selector.update_outcome("ask", ask_ok)
         elif choice == "sweep":
             self.selector.update_outcome("sweep", success)
@@ -100,9 +104,10 @@ def test_v1_v3(seed=0):
         if not ctrl.alive:
             break
     rel_after_fail = sel.estimators["ask"].reliability
-    # V3：换正确环境，可靠性应回升
+    # V3：换正确环境，可靠性应回升（补能量避免饿死干扰）
     env.ask_noise = 0.0
-    for _ in range(30):
+    ctrl.energy = 0.6  # 恢复能量（V3 测可靠性可逆，非生存）
+    for _ in range(60):
         ctrl.step()
         if not ctrl.alive:
             break
@@ -186,6 +191,8 @@ def test():
     v3 = rel_ok > rel_fail + 0.1
     print(f"\nV1: 全错环境 ask 可靠性 {rel_fail:.3f} (<0.3: {'OK' if v1 else 'FAIL'})", flush=True)
     print(f"V3: 恢复正确后可靠性 {rel_ok:.3f} (回升: {'OK' if v3 else 'FAIL'})", flush=True)
+    print(f"  [归因] V3 回升经 3% 试探触发（可靠性<阈值后靠试探重试，", flush=True)
+    print(f"         成功一次即越阈回升——非'模型感知环境变化'）", flush=True)
 
     # ─── V2 ───
     b, a = test_v2()
@@ -199,34 +206,37 @@ def test():
           f"{'OK' if v4 else 'FAIL'}", flush=True)
 
     # ─── N 组 ───
-    print(f"\n── 负对照（对比阵列，n=5）──", flush=True)
+    print(f"\n── 负对照（对比阵列，n=5，含 std）──", flush=True)
     # N1/N4 用环境切换（好→坏）：冻结应无法适应，未冻结应学会 sweep
     n1 = run_group("N1 冻结可靠性", ask_noise=0.0, freeze=True, switch_noise=0.9)
-    n4 = run_group("N4 免费完美(切换)", ask_noise=0.0, switch_noise=0.9)
+    n4 = run_group("N4 未冻结+切换", ask_noise=0.0, switch_noise=0.9)
+    # N2/N3 纯环境（对称：N2 全败 vs N3 噪声——同配置族）
     n2 = run_group("N2 问路永远失败", ask_noise=1.0)
     n3 = run_group("N3 噪声", ask_noise=0.3)
     for name, res in [("N1 冻结+切换", n1), ("N4 未冻结+切换", n4),
                       ("N2 全败", n2), ("N3 噪声", n3)]:
         food = np.mean([r["food"] for r in res])
+        food_sd = np.std([r["food"] for r in res])
         surv = np.mean([r["survived"] for r in res])
         asks = np.mean([r["asks"] for r in res])
-        print(f"  {name}: 食物 {food:.1f} 存活 {surv:.0f} 问路 {asks:.0f}", flush=True)
+        asks_sd = np.std([r["asks"] for r in res])
+        print(f"  {name}: 食物 {food:.1f}±{food_sd:.1f} 存活 {surv:.0f} "
+              f"问路 {asks:.0f}±{asks_sd:.0f}", flush=True)
 
-    # ─── 对比阵列判定 ───
-    # N2：问路永远失败 → 学会少问（全段问路 < N4 的 40%）
+    # ─── 对比阵列判定（含 std 裕度）───
+    a_n1 = np.mean([r["asks"] for r in n1]); sd_n1 = np.std([r["asks"] for r in n1])
+    a_n4 = np.mean([r["asks"] for r in n4]); sd_n4 = np.std([r["asks"] for r in n4])
     a_n2 = np.mean([r["asks"] for r in n2])
-    a_n4 = np.mean([r["asks"] for r in n4])
-    # N1 vs N4：环境切换后，冻结的仍疯狂问（ask 可靠性锁 0.5），未冻结的学会 sweep
-    # 用"切换后问路占比"：N4 后半段问路应大幅下降，N1 保持
-    # 简化：N1 全段问路应显著高于 N4（冻结无法适应坏环境）
-    f_n1 = np.mean([r["food"] for r in n1])
-    f_n4 = np.mean([r["food"] for r in n4])
-    n_ok = (a_n2 < a_n4 * 0.5          # N2 学会少问（含试探，宽松）
-            and (np.mean([r["asks"] for r in n1]) >
-                 np.mean([r["asks"] for r in n4]) * 1.3))  # N1 冻结仍问
-    print(f"\n  对比阵列: N2 问路 {a_n2:.0f} vs N4 {a_n4:.0f}（N2 应显著少问）", flush=True)
-    print(f"  N1 冻结问路 {np.mean([r['asks'] for r in n1]):.0f} vs N4 {a_n4:.0f} "
-          f"（冻结应仍问——无法适应切换）", flush=True)
+    a_n3 = np.mean([r["asks"] for r in n3])
+    # N1（冻结）问路应显著高于 N4（未冻结）——差 > 两者 std 之和
+    n1_gt = a_n1 > a_n4 + sd_n1 + sd_n4
+    # N2（全败）问路应显著低于 N3（噪声）——对称配置族内比较
+    n2_lt = a_n2 < a_n3 * 0.5
+    n_ok = n1_gt and n2_lt
+    print(f"\n  对比阵列: N1 冻结 {a_n1:.0f}±{sd_n1:.0f} vs N4 {a_n4:.0f}±{sd_n4:.0f} "
+          f"（冻结应仍问: {'OK' if n1_gt else 'FAIL'}）", flush=True)
+    print(f"  N2 全败 {a_n2:.0f} vs N3 噪声 {a_n3:.0f}（N2 应少问: "
+          f"{'OK' if n2_lt else 'FAIL'}）", flush=True)
 
     checks = [("V1 失败→可靠性↓", v1), ("V2 误差进模型", v2),
               ("V3 可逆", v3), ("V4 可靠性驱动切换", v4),

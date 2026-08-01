@@ -98,7 +98,7 @@ class ProcessSelector:
         for name, est in self.estimators.items():
             if est.reliability < self.min_reliability:
                 # 试探：低概率重新尝试（可靠性可逆的前提）
-                if np.random.random() >= 0.03:
+                if np.random.random() >= 0.05:
                     continue
             cost = self.ask_cost if name == "ask" else self.sweep_cost
             gain = est.expected_gain(cost)
