@@ -10,6 +10,7 @@
 > - ✅ P8c 句法：已实现（`cognition/language/syntax.py`，`test_syntax.py` 通过）
 > - ✅ ③ 情绪+他者接入主循环：已实现（`main.py`，`test_integration_emotion_other.py`）
 > - ✅ ④ 跨域迁移：已实现（`core/cross_domain.py`，`test_cross_domain.py` 通过）
+> - ✅ ⑤ 触类旁通：策略层迁移（`test_transfer_analogy.py`）——少样本迁移成立（37vs20），零样本不成立（复审修正）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
@@ -217,6 +218,7 @@ session 结束（死亡/主动保存）
 - [x] **情绪系统**（`core/emotion.py`）— 显式情绪信号（恐惧/好奇/平静）+ 决策调制，5 项验证全过
 - [x] **安全审查闭环**（security-review）— 新模块零外部注入面（仅 numpy）；防御修复：setter NaN/Inf 回退先验+钳制、EmotionSystem 入口 isfinite 防御、hypotheses 构造校验、self.prior 补存（MEDIUM×2+LOW×1+续审×1）
 - [x] **③/P8c/④ 审查闭环**（review + security-review）— 情绪接入 try/except 容错、few_shot atleast_2d 防标量 IndexError、similarity 删死代码（review warn→修复）；torch.load weights_only=True 封 pickle RCE 面、lstsq isfinite 过滤防 NaN 传播（security MEDIUM+LOW→修复）
+- [x] **⑤ 审查闭环**（review + security-review）— 停留基线伪胜利修正（真随机基线+D威胁回避判定+固定seed+eval偏移+深拷贝，review blocking×2→修复）；_key 负桶索引钳制（security 建议）；续审 pass 确认诚实降级（零样本负结果如实记录）
 
 验证：
 - `python test_persist.py` — checkpoint 往返 ✅
