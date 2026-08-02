@@ -16,6 +16,7 @@
 > - ✅ friend-audit 修复③：override_action 死变量接应用点（原只有赋值/清除无读取——元认知重定向从未生效）——`main.py` 决策后执行前统一应用 + 用后即清 + 睡眠守卫 + 值域钳制；`test_override_live.py` A-E 全 OK（覆盖/恢复/守卫/钳制/清除）；security warn 4 项已修（55db434）
 > - ✅ override 修复科学检验（`test_override_stats.py`）：机制层面真实激活——注入 cognition 后 GapDetector 触发（fast_failure/world_model 缺口），2000 tick 内 override 应用 **732 次（37%）/ 433 次（22%）（两次运行，无 seed 波动）**（修复前全部丢弃）；判定层面无系统性变化——E2（A OK/B/C WARN 同历史）、E6（NO/OK-360 无 seed 波动，历史 WARN 单次）、E14（0.6±0.8 vs 0.0±0.0 保持 OK）——元认知覆盖动作与随机探索效果相近，判定指标由驱动力/反射主导；附发现：AGI() 默认 cognition=None（认知块含元认知更新整体跳过——真实实验均注入）
 > - ✅ 元认知目标质量提升（`test_goal_quality.py`）：发现并修复**第二处隐藏断链**——`goal_gen.py` 检查 `get_exploration_target` 接口但 SpatialMemory **从未实现**（空间记忆引导从未生效，恒回退随机方向）。实现信息增益导向目标生成（①未访问位置采样 ②低熟悉度+高惊奇评分 ③随机回退）。**单元验证稳定（3 seeds）**：引导目标 100%（修复前 0%）、目标熟悉度 0.00 vs 随机基线 0.15-0.75、未访问目标 100%；**行为判定波动内无显著差异**——E2 两次运行（3 OK / 1 OK+2 WARN，无 seed）、E6 OK 481 tick（历史 NO/360 波动）——机制改善确认、宏观判定仍由驱动/反射主导（与 override 修复结论一致）。review warn 修复（7e837a9）：env_size 防御、信息增益阈值 0.3（None 回退真实可达）、测试 rng 可复现
+> - ✅ **接线 B1-B3（DESIGN_CONCEPTS §7.5 清单，2026-08）**：B1 curiosity→learning progress（9610563——原 CuriosityManager 主循环零调用+计数非进展率；接线级验证 D：world_loss 流入 50 条；注 world_loss 变化 0.0000=信号空转实证）；B2 sleep 按 surprise 加权重放（241b940——27% vs 10% 基线，CLS）；B3 世界模型慢副本 EMA+稳态门控（241b940+90e7c30——A/B/C/D 全过；review blocking×2：set_cognition 挂 agi 引用（门控原恒 1.0 死代码）+ EMA 设备惰性重注册）。B4 epistemic 部分接线（空间记忆引导已有）、B5 模仿待 teacher。**教训：接线没验证=等于没接（三次静默失效均 review 抓出）**
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
