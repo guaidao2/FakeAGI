@@ -218,9 +218,7 @@ class GoalPersistence:
                 abandon = True                # 能量危机
             elif self._other_targets_same(env, pos):
                 abandon = True                # 他者目标同一食物（冲突）
-            elif env._other_working_at(who, pos):
-                abandon = True                # 轮流信号：他者正在此格工作
-                # （社会感知驱动资源分配——避开正在被占用的资源）
+            # （nit：轮流信号恒 False 死分支已删除——占用检测用 _conflict_open）
             if progress_now > self.progress_seen:
                 self.progress_seen = progress_now
                 self.stall_ticks = 0
@@ -420,14 +418,7 @@ def main():
         print(f"  {label}: 目标机制开 食物={f_on} | 关 食物={f_off}"
               f"（×3seeds 合计）")
     # 容量增益判据：大模型关 > 小模型关（纯容量对照，无机制混杂）
-    cap_ok = False
-    for s in seeds:
-        np.random.seed(s)
-        torch.manual_seed(s)
-        big_off = run_social(seed=s, n_food=2, gather_cost=15,
-                             goal_enabled=False,
-                             hidden_dim=128)["food"]
-    # 用上方循环已收集的 f_off（h=128）与 h=64 比较——重跑一次精确收集
+    # （nit：原 423-429 预循环为无效代码被清零覆盖——已删除）
     small_off = big_off = 0
     for s in seeds:
         np.random.seed(s)
@@ -440,8 +431,8 @@ def main():
                               hidden_dim=128)["food"]
     cap_ok = big_off > small_off
     print(f"  容量增益（关对照）: 大模型 {big_off} vs 小模型 {small_off}"
-          f"（×3seeds）{'有增益' if cap_ok else '无增益'}"
-          f"（大 > 小 为判据）")
+          f"（×3seeds）{'有增益' if cap_ok else '未决（需RandomState隔离重测）'}"
+          f"（大 > 小 为判据；序列敏感下不可下结论）")
 
     # 稀缺度梯度（用户生物学假设验证）：
     #   n_food 少 = 资源稀缺（易冲突）；n_food 多但 gather_cost 高 =
