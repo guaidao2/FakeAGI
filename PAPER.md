@@ -934,6 +934,37 @@ RandomState 隔离后重测（future work）。
 
 ---
 
+### friend-audit 修复（2026-08 系统性工作流缺陷审计）
+
+外部审计（friend-audit）发现三个系统性缺陷并逐一修复：
+
+**① GameNN 世界模型从未被有效训练**（`GameNN-WorldModel`）：
+`WorldModelStep.predicted_state` 原无监督目标（纯想象输出），`outcome_prob`
+训练依赖调用方传 `target_outcome`（示例传 `torch.rand`=学噪声）。
+修复：`compute_loss` 新增 `target_next_state` MSE 监督 + 真实目标训练脚本
+`examples/train_world_model.py`（冻结编码器隔离验证）——**next_state loss
+19.1x 下降**，世界模型真实学习环境动力学。
+
+**② GrowingLLM 生长后新层参数脱优化器**（`Growing-LLM`）：
+`opt = AdamW(model.parameters())` 训练开始创建一次，`engine.step()` 生长
+添加的新层**永不注册进优化器**——梯度算了但永不应用（"新脑区"不学习，
+GLA 门控 g_proj 等全部失效）。修复：生长后参数 id diff →
+`add_param_group`（`verify_grow_opt.py` 验证：groups 1→2，生长后 loss
+20.5→8.38 优于修复前 11.37）。`train_r1.py` 补丁 `train_r1_fix.patch`。
+
+**③ FakeAGI override_action 死变量**（本仓库，`29ec4b0`+`55db434`）：
+`override_action` 只有赋值/清除、全文件无应用点——**元认知重定向意图
+从未真正影响动作**（设计意图全部失效）。修复：决策后执行前统一应用 +
+用后即清 + 睡眠守卫 + 值域钳制（security warn 4 项）——`test_override_live.py`
+A-E 全 OK。**科学检验**（`test_override_stats.py`）：机制层面真实激活
+（GapDetector 缺口 → GoalGenerator 探索目标 → override 应用 **732 次
+(37%) / 433 次 (22%)**，修复前全部丢弃）；判定层面无系统性变化
+（E2/E6/E14 对比——判定指标由驱动力/反射主导，元认知覆盖动作与随机
+探索效果相近）。附带发现：`AGI()` 默认 `cognition=None`（认知块含
+元认知更新整体跳过——真实实验均注入）。
+
+---
+
 ## 5. 讨论
 
 ### 5.1 与主流路线的对比

@@ -20,6 +20,11 @@ FakeAGI 是一个基于自维持哲学的通用认知架构实验性实现。它
 
 下一代进化架构（MoE 专家路由 + 经验 DNA 跨代）见 [`EVOLUTION.md`](EVOLUTION.md)。
 
+> **2026-08 friend-audit 修复**：系统性缺陷审计与修复记录（GameNN 世界模型
+> 训练目标缺失、GrowingLLM 生长后新层脱优化器、FakeAGI override 死变量）
+> 见 [`PAPER.md`](PAPER.md) 文末「friend-audit 修复」小节与
+> [`EVOLUTION.md`](EVOLUTION.md) 头部状态行。
+
 ## 架构概览
 
 ```
