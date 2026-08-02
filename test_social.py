@@ -53,6 +53,11 @@ class World2:
         self.last_target_b = None
         self._conflict_open = False
 
+    def _other_working_at(self, who, pos):
+        """轮流信号：他者是否正在此食物格工作（社会感知驱动资源分配）"""
+        other = "b" if who == "a" else "a"
+        return self._worked_food.get(other) == tuple(pos)
+
     def _respawn_food(self):
         while True:
             f = [self.rng.randint(self.size), self.rng.randint(self.size)]
@@ -146,11 +151,13 @@ class World2:
             + abs(self.pos_a[1] - self.pos_b[1])
 
 
-def make_agi(env):
+def make_agi(env, hidden_dim=64):
+    # 参数增大实验：hidden_dim 64→128 可配置（学习能力对比——模型容量
+    # 不足可能导致 AGI 学不会复杂行为如停留工作）
     agi = AGI({"auto_save_on_death": False})  # 关死亡快照（review nit：6 次运行污染 checkpoints/）
     agi.set_cognition(CognitionPipeline({
         "input_dim": 6, "self_state_dim": 14,
-        "hidden_dim": 64, "n_actions": 5, "n_strategies": 4,
+        "hidden_dim": hidden_dim, "n_actions": 5, "n_strategies": 4,
     }))
     agi.set_env(env)
     return agi
@@ -203,7 +210,7 @@ class GoalPersistence:
                 self.target = tuple(pos)      # 新目标：进入坚持
                 self.progress_seen = 0
                 self.stall_ticks = 0
-            # 放弃条件（重大预测误差）
+            # 放弃条件（重大预测误差 + 轮流信号）
             abandon = False
             if surprise > self.surprise_threshold:
                 abandon = True                # surprise 飙升（真实通路）
@@ -211,6 +218,9 @@ class GoalPersistence:
                 abandon = True                # 能量危机
             elif self._other_targets_same(env, pos):
                 abandon = True                # 他者目标同一食物（冲突）
+            elif env._other_working_at(who, pos):
+                abandon = True                # 轮流信号：他者正在此格工作
+                # （社会感知驱动资源分配——避开正在被占用的资源）
             if progress_now > self.progress_seen:
                 self.progress_seen = progress_now
                 self.stall_ticks = 0
@@ -234,11 +244,11 @@ class GoalPersistence:
 
 
 def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
-               other_enabled=True, goal_enabled=False):
+               other_enabled=True, goal_enabled=False, hidden_dim=64):
     """双 AGI 共跑；返回指标"""
     env = World2(seed=seed, n_food=n_food, gather_cost=gather_cost)
-    agi_a = make_agi(env)
-    agi_b = make_agi(env)
+    agi_a = make_agi(env, hidden_dim=hidden_dim)
+    agi_b = make_agi(env, hidden_dim=hidden_dim)
     # 简易环境适配（AGI 需要 env.get_pos/observe/step 接口）
     class Adapter:
         def __init__(s, who):
@@ -391,6 +401,35 @@ def main():
         print("  目标坚持机制有效（坚持/放弃通路正常）——工作能力解锁")
     else:
         print("  目标坚持机制未通过——如实记录（坚持/放弃部分失效）")
+
+    # ── 轮流信号 + 参数增大对比（稀缺-难获：当前食物 0 死锁）──
+    print("\n=== 轮流信号 + 参数增大（稀缺-难获，2 食物）===")
+    for hdim, label in ((64, "小模型 h=64"), (128, "大模型 h=128")):
+        f_on = f_off = 0
+        for s in seeds:
+            np.random.seed(s)
+            torch.manual_seed(s)
+            # 轮流信号开（goal_enabled=True 含 _other_working_at 放弃）
+            f_on += run_social(seed=s, n_food=2, gather_cost=15,
+                               goal_enabled=True,
+                               hidden_dim=hdim)["food"]
+            f_off += run_social(seed=s, n_food=2, gather_cost=15,
+                                goal_enabled=False,
+                                hidden_dim=hdim)["food"]
+        print(f"  {label}: 轮流信号开 食物={f_on} | 关 食物={f_off}"
+              f"（×3seeds 合计）")
+    # 大模型 + 轮流信号解锁判据：食物 > 0 且 > 关
+    # （当前小模型食物 0——死锁；解锁需>0）
+    big_on = 0
+    for s in seeds:
+        np.random.seed(s)
+        torch.manual_seed(s)
+        big_on += run_social(seed=s, n_food=2, gather_cost=15,
+                             goal_enabled=True, hidden_dim=128)["food"]
+    unlock_ok = big_on > 0
+    print(f"  大模型+轮流信号 食物={big_on}（×3seeds）"
+          f"{'解锁' if unlock_ok else '仍死锁'}"
+          f"（>0 为解锁判据）")
 
     # 稀缺度梯度（用户生物学假设验证）：
     #   n_food 少 = 资源稀缺（易冲突）；n_food 多但 gather_cost 高 =
