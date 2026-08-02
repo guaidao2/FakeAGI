@@ -53,11 +53,6 @@ class World2:
         self.last_target_b = None
         self._conflict_open = False
 
-    def _other_working_at(self, who, pos):
-        """（废弃——review blocking：env 禁止重叠使'他者站在我格'恒 False，
-        轮流信号死代码。他者占用检测用 _conflict_open 已有语义）"""
-        return False
-
     def _respawn_food(self):
         while True:
             f = [self.rng.randint(self.size), self.rng.randint(self.size)]
@@ -298,8 +293,10 @@ def run_social(seed=0, max_ticks=3000, n_food=4, gather_cost=0,
                     env, who, pos, agi.last_action, prog, surp, en, other_pos)
                 # None 哨兵：非坚持不覆盖（AGI 自主决策）
                 agi._goal_override = final_a if final_a is not None else None
-                agi.step()  # 完整 step（override 内部生效）
-                agi._goal_override = None
+                try:
+                    agi.step()  # 完整 step（override 内部生效）
+                finally:
+                    agi._goal_override = None  # LOW：异常路径也复位（防动作僵化）
             else:
                 agi.step()
             if not agi.alive and deaths[who] is None:
