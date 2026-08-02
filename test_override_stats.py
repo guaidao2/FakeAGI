@@ -84,30 +84,21 @@ def main():
         gap = gd.detect()
         print(f"  [诊断] detect() = {gap}")
     n_ticks = 2000
-    produced = 0
-    applied = 0
-    app_actions = []
     for t in range(n_ticks):
-        if getattr(agi, 'override_action', -1) >= 0:
-            produced += 1
         agi.step()
-        if args.env and hasattr(agi, 'pos') and agi.pos is not None:
-            agi.pos = list(agi.pos)
-    # 主循环内计数器（应用点 +1——step 外部看不到中间态）
+    # 主循环内计数器（应用点 +1——step 外部看不到中间态；
+    # produced 外部观测恒 0 无意义——override 在 step 内产生+消费）
     applied = getattr(agi, '_override_applied', 0)
 
-    print(f"  {n_ticks} ticks | override 产生={produced} "
-          f"应用={applied}（应用率 {applied/max(produced,1)*100:.0f}%）")
-    if app_actions:
-        uniq, counts = np.unique(app_actions, return_counts=True)
-        dist = {int(u): int(c) for u, c in zip(uniq, counts)}
-        print(f"  应用动作分布: {dist}")
-    else:
-        print("  无 override 产生——元认知探索模式未激活（影响面小）")
+    rate = applied / n_ticks * 100
+    print(f"  {n_ticks} ticks | override 应用={applied} "
+          f"（{rate:.0f}% tick 被元认知探索目标覆盖）")
+    if applied == 0:
+        print("  override 未应用——元认知探索模式未激活（影响面小）")
 
-    # 判定：修复后通路激活（若产生>0 则应用应=产生）
-    ok = produced == 0 or applied == produced
-    print(f"  判定: {'OK（通路完整激活）' if ok else 'FAIL（产生未消费）'}")
+    # 判定：修复后通路激活（>0 即激活；EVOLUTION 口径 37%）
+    ok = applied > 0
+    print(f"  判定: {'OK（通路激活）' if ok else 'FAIL（未激活）'}")
     return 0 if ok else 1
 
 

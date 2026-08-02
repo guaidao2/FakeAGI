@@ -14,7 +14,7 @@
 > - ✅ ⑥ 迁移价值评估：何时迁移的元认知（`core/transfer_selector.py`）——同构升/异构降/未知域选对（5 项全过）；已接入主循环
 > - ✅ E14 全模块协同：语言+情绪+他者全开（`test_emergent.py`）——5 项全过，暴露睡眠未触发短板
 > - ✅ friend-audit 修复③：override_action 死变量接应用点（原只有赋值/清除无读取——元认知重定向从未生效）——`main.py` 决策后执行前统一应用 + 用后即清 + 睡眠守卫 + 值域钳制；`test_override_live.py` A-E 全 OK（覆盖/恢复/守卫/钳制/清除）；security warn 4 项已修（55db434）
-> - ✅ override 修复科学检验（`test_override_stats.py`）：机制层面真实激活——注入 cognition 后 GapDetector 触发（fast_failure/world_model 缺口），2000 tick 内 override 应用 **732 次（37%）**（修复前全部丢弃）；判定层面无系统性变化——E2（A OK/B/C WARN 同历史）、E6（NO/OK-360 无 seed 波动，历史 WARN 单次）、E14（0.6±0.8 vs 0.0±0.0 保持 OK）——元认知覆盖动作与随机探索效果相近，判定指标由驱动力/反射主导；附发现：AGI() 默认 cognition=None（认知块含元认知更新整体跳过——真实实验均注入）
+> - ✅ override 修复科学检验（`test_override_stats.py`）：机制层面真实激活——注入 cognition 后 GapDetector 触发（fast_failure/world_model 缺口），2000 tick 内 override 应用 **732 次（37%）/ 433 次（22%）（两次运行，无 seed 波动）**（修复前全部丢弃）；判定层面无系统性变化——E2（A OK/B/C WARN 同历史）、E6（NO/OK-360 无 seed 波动，历史 WARN 单次）、E14（0.6±0.8 vs 0.0±0.0 保持 OK）——元认知覆盖动作与随机探索效果相近，判定指标由驱动力/反射主导；附发现：AGI() 默认 cognition=None（认知块含元认知更新整体跳过——真实实验均注入）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
