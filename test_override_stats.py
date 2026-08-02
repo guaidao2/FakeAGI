@@ -4,8 +4,7 @@ friend-audit 修复③检验：override_action 通路激活统计
 修复前：override_action 死变量（元认知探索意图产生后丢弃）
 修复后：真实应用。本脚本统计：
   A. override 产生 tick 数（元认知探索模式激活频率）
-  B. override 实际应用 tick 数（通路真实生效）
-  C. 应用的动作分布（钳制后 0-4）
+  B. override 实际应用 tick 数（通路真实生效，主循环计数器）
 """
 import sys
 import numpy as np
