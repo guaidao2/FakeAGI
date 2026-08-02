@@ -101,6 +101,8 @@ class AGI:
         # 情绪系统（默认关闭——接入点：探索率调制）
         self.emotion = None
         self.emotion_state = {}
+        # B1 接线：curiosity 接 learning progress（原核心模块零调用死置）
+        self.curiosity = None
         # 他者模型（真他者跟踪，默认关闭——区别于 hemin 影子自我 self.other_model）
         self.other_tracker = None
         # ⑥ 迁移价值评估（默认关闭——接入点：环境切换决策）
@@ -420,6 +422,22 @@ class AGI:
                 exploration = 0.1
             else:
                 exploration = 0.2
+            # B1 接线（DESIGN_CONCEPTS §7.5）：curiosity 接 learning
+            # progress——world_model 误差下降率驱动探索率（ICM）。
+            # 原 CuriosityManager 主循环零调用（存在未接线）。
+            if getattr(self, '_curiosity_lp_enabled', True):
+                try:
+                    if self.curiosity is None:
+                        from core.curiosity import CuriosityManager
+                        self.curiosity = CuriosityManager()
+                    self.curiosity.update_learning_progress(
+                        info.get("world_loss", 0.5))
+                    self.curiosity.update_budget(
+                        self.self_model.survival_prob)
+                    if self.curiosity.should_explore(surprise):
+                        exploration = max(exploration, 0.4)
+                except Exception:
+                    pass
             # 目标层：落差高 + 无线索 → 定向扫掠（信息寻求，非随机）
             # 仅 _info_seek_enabled 时生效（显式启用，避免 G2/G5 混变量）
             self._info_seek_action = None
