@@ -384,8 +384,9 @@ def main():
         if not pers:
             stuck += 1
     abandon_ok = stuck > 0  # 工作 5 tick 无进展 → 放弃（stall 触发）
-    print(f"  放弃验证（进度停滞）: {stuck}/8 次放弃 "
-          f"{'OK' if abandon_ok else 'FAIL'}（重大预测误差→换路）")
+    # nit 校准：stuck 计"非坚持"（含放弃后冷却期），措辞区分
+    print(f"  放弃验证（进度停滞）: {stuck}/8 次非坚持 "
+          f"(含放弃+冷却期) {'OK' if abandon_ok else 'FAIL'}（重大预测误差→换路）")
     if persist_ok and abandon_ok:
         print("  目标坚持机制验证通过——解锁假说后半（丰富难得→共存）")
     else:
