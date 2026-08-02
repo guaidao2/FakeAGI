@@ -13,6 +13,7 @@
 > - ✅ ⑤ 触类旁通：策略层迁移（`test_transfer_analogy.py`）——少样本迁移成立（37vs20），零样本不成立（复审修正）
 > - ✅ ⑥ 迁移价值评估：何时迁移的元认知（`core/transfer_selector.py`）——同构升/异构降/未知域选对（5 项全过）；已接入主循环
 > - ✅ E14 全模块协同：语言+情绪+他者全开（`test_emergent.py`）——5 项全过，暴露睡眠未触发短板
+> - ✅ friend-audit 修复③：override_action 死变量接应用点（原只有赋值/清除无读取——元认知重定向从未生效）——`main.py` 决策后执行前统一应用 + 用后即清 + 睡眠守卫 + 值域钳制；`test_override_live.py` A-E 全 OK（覆盖/恢复/守卫/钳制/清除）；security warn 4 项已修（55db434）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
