@@ -8,6 +8,7 @@
 """
 
 import numpy as np
+import math
 
 
 class CuriosityManager:
@@ -30,6 +31,9 @@ class CuriosityManager:
         loss 下降（在学）→ 高好奇；loss 停滞/上升 → 低好奇。
         与 ICM 一致：奖励"学习进展"而非"新奇"。"""
         if not self.lp_enabled or world_loss is None:
+            return
+        # nit 修复：NaN/Inf 防护（污染 _lp_value 会永久失效）
+        if not math.isfinite(float(world_loss)):
             return
         self._loss_hist.append(float(world_loss))
         if len(self._loss_hist) > self._lp_window:

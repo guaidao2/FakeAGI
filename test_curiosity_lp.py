@@ -60,7 +60,50 @@ def run():
             and cm6.total_explorations == 2)
     print(f"  C: 计数/预算逻辑保留 {'OK' if ok_c else 'FAIL'}")
 
-    ok = ok_a and ok_b and ok_c
+    # D：接线级——主循环 tick 后 curiosity 真实收到 world_loss
+    #    （review blocking 修复验证：原位置 NameError 静默吞掉→_loss_hist 恒空）
+    from main import AGI
+    from cognition import CognitionPipeline
+    agi = AGI()
+    agi.set_cognition(CognitionPipeline({
+        "input_dim": 4, "self_state_dim": 14,
+        "hidden_dim": 64, "n_actions": 5, "n_strategies": 4
+    }))
+    class TestEnv:
+        def __init__(self):
+            self.pos = [5, 5]
+            self.food_pos = [2, 2]
+            self.water_pos = [7, 7]
+        def get_pos(self): return self.pos
+        def observe(self):
+            return np.array([(self.food_pos[0]-self.pos[0])/10,
+                             (self.food_pos[1]-self.pos[1])/10,
+                             (self.water_pos[0]-self.pos[0])/10,
+                             (self.water_pos[1]-self.pos[1])/10])
+        def step(self, a):
+            dxs = [(0,0),(0,-1),(-1,0),(1,0),(0,1)]
+            dx, dy = dxs[a % 5]
+            self.pos[0] = max(0, min(9, self.pos[0] + dx))
+            self.pos[1] = max(0, min(9, self.pos[1] + dy))
+            return {"energy_delta": -0.001, "water_delta": -0.0005}
+    agi.set_env(TestEnv())
+    for _ in range(120):          # > 窗口一半，确保 lp 有值
+        agi.step()
+    hist_len = len(agi.curiosity._loss_hist) if agi.curiosity else 0
+    lp_val = agi.curiosity.learning_progress if agi.curiosity else 0.0
+    losses = agi.curiosity._loss_hist if agi.curiosity else []
+    spread = (max(losses) - min(losses)) if len(losses) > 1 else 0.0
+    print(f"  D: 主循环接线——_loss_hist={hist_len} 条, lp={lp_val:.3f}, "
+          f"world_loss 变化幅度={spread:.4f}")
+    # 接线判据 = 数据流入（hist 满）；lp>0 依赖 world_loss 有变化——
+    # 那是信号质量问题（§8 根因：世界模型预测恒 0.5 兜底），非接线问题
+    ok_d = hist_len >= 10
+    print(f"     {'OK（B1 接线真实生效——world_loss 流入好奇心）' if ok_d else 'FAIL（接线仍断）'}")
+    if lp_val == 0.0 and ok_d:
+        print(f"     [注] lp=0 因 world_loss 变化幅度 {spread:.4f}≈0"
+              f"（信号空转——§8 诊断；接线已通，信号质量待世界模型修复）")
+
+    ok = ok_a and ok_b and ok_c and ok_d
     print(f"\n判定: {'OK（B1 接线完成：curiosity 由学习进展驱动）' if ok else 'FAIL'}")
     return 0 if ok else 1
 
