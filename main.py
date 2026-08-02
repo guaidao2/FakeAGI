@@ -124,6 +124,14 @@ class AGI:
     
     def set_cognition(self, cognition):
         self.cognition = cognition
+        # review blocking 修复：B3 稳态门控需要认知核心回指 AGI——
+        # 否则 cognition/__init__.py 的 hasattr(self,'agi') 恒 False，
+        # gate 恒 1.0（稳态门控静默失效——又是"接线没接"）
+        try:
+            if cognition is not None:
+                cognition.agi = self
+        except Exception:
+            pass
     
     def set_env(self, env):
         """设置环境——⑥ 迁移价值评估接入点（默认关闭零影响）：

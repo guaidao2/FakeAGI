@@ -37,10 +37,12 @@ class SleepCycle:
         
         n = min(32, len(replay_buffer))
         # 显著性权重：surprise 高的经验优先（+0.1 保底防零权重）
+        # nit：None 防护（与 getattr 分支对称）
         weights = []
         for item in replay_buffer:
             if isinstance(item, dict):
-                s = float(item.get("surprise", 0.0))
+                s = item.get("surprise", 0.0)
+                s = float(s) if s is not None else 0.0
             else:
                 s = getattr(item, "surprise", 0.0) or 0.0
             weights.append(0.1 + s)

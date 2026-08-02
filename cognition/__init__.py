@@ -307,8 +307,9 @@ class CognitionPipeline:
             try:
                 b = self.agi.body if hasattr(self, 'agi') and self.agi else None
                 if b is not None:
-                    gate = max(0.0, 1.0 - b.stress * 2.0
-                               - max(0.0, 0.3 - b.energy) * 3.0)
+                    # nit：clamp 上下限（gate ∈ [0,1]）
+                    gate = min(1.0, max(0.0, 1.0 - b.stress * 2.0
+                                        - max(0.0, 0.3 - b.energy) * 3.0))
             except Exception:
                 pass
             world_loss = self.world_model.train_step(

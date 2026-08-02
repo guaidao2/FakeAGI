@@ -54,7 +54,26 @@ def run():
     ok_c = shape_ok
     print(f"     {'OK（生长后重注册）' if ok_c else 'FAIL'}")
 
-    ok = ok_a and ok_b and ok_c
+    # D：设备移动后首步 EMA 不崩（review blocking 修复验证——
+    # 原 __init__ CPU 注册 + .to(cuda) 后首步必 RuntimeError）
+    try:
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+        wm2 = WorldModel(input_dim=32, n_actions=5)
+        wm2.to(dev)
+        h2 = torch.randn(4, 32, device=dev)
+        t2 = torch.randn(4, 32, device=dev)
+        a2 = torch.zeros(4, dtype=torch.long, device=dev)
+        wm2.train_step(h2, t2, a2, gate=1.0)  # 首步：设备不匹配→惰性重注册
+        # 比较用 .type（torch.device('cuda') != 'cuda:0' 不归一化）
+        ok_d = wm2.shadow["predictor.0.weight"].device.type == dev
+        print(f"  D: {dev} 首步 train_step——shadow device="
+              f"{wm2.shadow['predictor.0.weight'].device}")
+        print(f"     {'OK（设备匹配惰性重注册）' if ok_d else 'FAIL'}")
+    except Exception as e:
+        print(f"  D: FAIL——{e}")
+        ok_d = False
+
+    ok = ok_a and ok_b and ok_c and ok_d
     verdict = ("OK（B3 接线完成：慢副本 EMA + 稳态门控 + 生长重注册）"
                if ok else "FAIL")
     print("\n判定: " + verdict)

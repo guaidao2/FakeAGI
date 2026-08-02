@@ -41,14 +41,26 @@ class WorldModel(nn.Module):
                 self.shadow[name] = p.detach().clone()
     
     def _ema_update(self, gate: float = 1.0):
-        """EMA 慢副本更新——gate<1 时冻结慢学习（应激高/能量低时保护已有表征）"""
+        """EMA 慢副本更新——gate<1 时冻结慢学习（应激高/能量低时保护已有表征）
+        review blocking 修复：设备不匹配时惰性重注册
+        （__init__ 在 CPU 注册 → .to(cuda) 后首步 EMA 必崩 RuntimeError）"""
         if gate <= 0.0:
             return
         with torch.no_grad():
+            # 设备/形状校验：任一不匹配 → 重注册（.to()/grow 后安全）
+            stale = False
             for name, p in self.named_parameters():
-                if name in self.shadow:
-                    self.shadow[name] = (self.ema_decay * self.shadow[name]
-                                         + (1 - self.ema_decay) * p.detach())
+                s = self.shadow.get(name)
+                if (s is None or s.device != p.device
+                        or s.shape != p.shape):
+                    stale = True
+                    break
+            if stale:
+                self._register_shadow()
+                return  # 重注册后本步不更新（下一 tick 正常 EMA）
+            for name, p in self.named_parameters():
+                self.shadow[name] = (self.ema_decay * self.shadow[name]
+                                     + (1 - self.ema_decay) * p.detach())
     
     def get_slow_params(self):
         """慢副本参数（决策/评估用——长期统计视角）"""

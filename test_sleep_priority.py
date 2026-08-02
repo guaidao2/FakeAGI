@@ -27,12 +27,7 @@ def run(seed=0):
     total_picked = 0
     for _ in range(n_trials):
         out = sc.consolidate(buf)
-        picked = set()
-        # 重建被选 indices 不易——用高 surprise 条目出现次数近似：
-        # consolidate 返回的是条目本身，统计其中高 surprise 条目数
-        for item in out:
-            picked.add(item["pos"][0])
-        # 简化：直接统计返回条目里 surprise 0.9 的数量
+        # 统计返回条目里高 surprise 的数量（should-fix：picked 死代码已删）
         high_picked += sum(1 for item in out if item["surprise"] == 0.9)
         total_picked += len(out)
     ratio = high_picked / total_picked
