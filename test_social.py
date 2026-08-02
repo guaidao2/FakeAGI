@@ -388,7 +388,7 @@ def main():
     print(f"  放弃验证（进度停滞）: {stuck}/8 次非坚持 "
           f"(含放弃+冷却期) {'OK' if abandon_ok else 'FAIL'}（重大预测误差→换路）")
     if persist_ok and abandon_ok:
-        print("  目标坚持机制验证通过——解锁假说后半（丰富难得→共存）")
+        print("  目标坚持机制有效（坚持/放弃通路正常）——工作能力解锁")
     else:
         print("  目标坚持机制未通过——如实记录（坚持/放弃部分失效）")
 
