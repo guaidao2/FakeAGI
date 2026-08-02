@@ -51,7 +51,7 @@ class GoalGenerator:
                     return ExplorationGoal("explore_novel", gap.score * 0.8,
                                          target_pos=target, duration=80,
                                          context="explore_unvisited")
-            # 没有空间记忆时，随机选择一个远程方向
+            # 无空间记忆或候选信息增益不足时，随机选择一个远程方向
             if agent_pos:
                 dx = np.random.choice([-1, 0, 1]) * env_size * 0.3
                 dy = np.random.choice([-1, 0, 1]) * env_size * 0.3
