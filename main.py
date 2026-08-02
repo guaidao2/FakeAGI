@@ -740,6 +740,13 @@ class AGI:
         # 决策后执行前覆盖，agi.step 完整执行认知/代谢/死亡检测）
         if getattr(self, '_goal_override', None) is not None:
             action = self._goal_override
+        # friend-audit 修复③：override_action 原为死变量（只有赋值/清除、
+        # 无应用点——元认知重定向意图从未真正影响动作）。接上应用点：
+        # 每 tick 元认知重新评估覆盖（503/510 行每 tick 赋值），用后即清。
+        elif (not self.body.is_sleeping
+                and getattr(self, 'override_action', -1) >= 0):
+            action = self.override_action
+            self.override_action = -1  # 本 tick 重定向，下 tick 元认知重新决定
 
         if self.env:
             result = self.env.step(action)
