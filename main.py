@@ -87,6 +87,8 @@ class AGI:
         self.metacognition = MetacognitionLayer(spatial_memory=self.spatial_memory)
         self.committee = DecisionCommittee(n_actions=5)
         self.committee_state = None
+        # security warn 修复：动作数（override 值域钳制用；与 committee/MoE 一致）
+        self.n_actions = 5
         # P1: MoE 专家路由（延迟创建——state_dim 由认知维度决定）
         self.moe = None
         self.moe_state_dim = None
@@ -738,15 +740,26 @@ class AGI:
 
         # 目标坚持 override（review blocking 修复：AGI 内部机制——
         # 决策后执行前覆盖，agi.step 完整执行认知/代谢/死亡检测）
-        if getattr(self, '_goal_override', None) is not None:
-            action = self._goal_override
+        # security warn 修复：_goal_override 也加睡眠守卫 + 值域钳制
+        if (not self.body.is_sleeping
+                and getattr(self, '_goal_override', None) is not None):
+            action = max(0, min(int(self._goal_override), self.n_actions - 1))
         # friend-audit 修复③：override_action 原为死变量（只有赋值/清除、
         # 无应用点——元认知重定向意图从未真正影响动作）。接上应用点：
         # 每 tick 元认知重新评估覆盖（503/510 行每 tick 赋值），用后即清。
+        # security warn 修复：值域钳制（防御非法覆盖动作）。
         elif (not self.body.is_sleeping
                 and getattr(self, 'override_action', -1) >= 0):
-            action = self.override_action
+            action = max(0, min(int(self.override_action), self.n_actions - 1))
             self.override_action = -1  # 本 tick 重定向，下 tick 元认知重新决定
+        elif (self.body.is_sleeping
+                and getattr(self, 'override_action', -1) >= 0):
+            # security warn 修复：睡眠时陈旧意图清除（防醒来后生效一 tick）
+            self.override_action = -1
+
+        # security warn 归因注释：override 覆盖点位于 MoE 学习之后——
+        # 覆盖前决策的 MoE 学习会用 override 动作产生的 reward 更新，
+        # 测试统计时需区分"AGI 自主动作"与"override 动作"（归因边界）
 
         if self.env:
             result = self.env.step(action)
