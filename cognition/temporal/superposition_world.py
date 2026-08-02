@@ -140,8 +140,10 @@ class SuperpositionWorldModel(nn.Module):
 
     # ─── 训练 ───
     def train_step(self, h: torch.Tensor, target: torch.Tensor,
-                   action: torch.Tensor = None) -> float:
-        """训练所有分支（振幅加权损失：被证据支持的分支优先学习）"""
+                   action: torch.Tensor = None, gate: float = 1.0) -> float:
+        """训练所有分支（振幅加权损失：被证据支持的分支优先学习）
+        B3 兼容：gate 参数——叠加态版本不做慢副本（分支即多假设），
+        接收但忽略（保持调用方接口一致）"""
         amps = self._amplitudes(h.device)
         self.optimizer.zero_grad()
         total_loss = 0.0

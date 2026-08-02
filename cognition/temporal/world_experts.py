@@ -105,7 +105,9 @@ class MultiExpertWorldModel(nn.Module):
 
     def train_step(self, h: torch.Tensor, target: torch.Tensor,
                    action: torch.Tensor = None,
-                   expert_weights: dict = None) -> float:
+                   expert_weights: dict = None,
+                   gate: float = 1.0) -> float:
+        # B3 兼容：gate 接收但忽略（专家世界模型无慢副本——专家即分域）
         pred = self.predict(h.detach(), action, expert_weights)
         if pred.shape[-1] != target.shape[-1]:
             min_d = min(pred.shape[-1], target.shape[-1])
