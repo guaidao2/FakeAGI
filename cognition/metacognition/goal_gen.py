@@ -43,9 +43,10 @@ class GoalGenerator:
     def generate(self, gap, agent_pos: list = None, env_size: int = 10) -> ExplorationGoal:
         """根据缺口生成目标"""
         if gap.kind == "world_model" or gap.kind == "surprise":
-            # 找到未探索的方向（使用空间记忆或随机方向）
+            # 找到未探索的方向（空间记忆引导——信息增益；随机回退）
             if self.spatial_memory is not None and hasattr(self.spatial_memory, 'get_exploration_target'):
-                target = self.spatial_memory.get_exploration_target()
+                target = self.spatial_memory.get_exploration_target(
+                    agent_pos=agent_pos, env_size=env_size)
                 if target is not None:
                     return ExplorationGoal("explore_novel", gap.score * 0.8,
                                          target_pos=target, duration=80,

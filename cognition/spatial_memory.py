@@ -97,6 +97,40 @@ class SpatialMemory:
         path.reverse()
         return path
     
+    def get_exploration_target(self, agent_pos=None, env_size=10, rng=None):
+        """信息增益导向的探索目标（friend-audit 深挖修复：
+        原 goal_gen.py 检查此接口但从未实现——空间记忆引导从未生效，
+        恒回退随机方向。实现后 GoalGenerator 自动启用）。
+
+        优先级：①从未访问位置（随机采样排除已访问——最大信息增益）
+                ②已访问中低熟悉度 + 高惊奇（评分：不熟悉×0.5 +
+                  惊奇×0.3 + 距离适中偏好×0.2）
+                ③无候选 → None（调用方随机回退）
+        """
+        rng = rng or np.random
+        # ① 从未访问：边界内随机采样，排除已访问节点
+        if len(self.nodes) < env_size * env_size:
+            for _ in range(30):
+                tx = int(rng.randint(0, env_size))
+                ty = int(rng.randint(0, env_size))
+                if (tx, ty) not in self.nodes:
+                    return [tx, ty]
+        # ② 已访问中选信息增益最高
+        best, best_score = None, -1.0
+        for pos, node in self.nodes.items():
+            if agent_pos is not None and pos == tuple(agent_pos):
+                continue
+            unfamiliar = 1.0 - min(node.visit_count / 5.0, 1.0)
+            dist = (abs(pos[0] - agent_pos[0]) + abs(pos[1] - agent_pos[1])
+                    if agent_pos else 0)
+            dist_pref = (1.0 if env_size * 0.15 <= dist <= env_size * 0.5
+                         else 0.3)
+            score = unfamiliar * 0.5 + node.avg_surprise * 0.3 + dist_pref * 0.2
+            if score > best_score:
+                best = list(pos)
+                best_score = score
+        return best  # None → 调用方随机回退
+
     def get_nearest_with_tag(self, from_pos, tag, max_dist=10):
         """找到最近的带有某个标签的位置"""
         if from_pos not in self.nodes:
