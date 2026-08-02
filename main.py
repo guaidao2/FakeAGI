@@ -752,6 +752,8 @@ class AGI:
                 and getattr(self, 'override_action', -1) >= 0):
             action = max(0, min(int(self.override_action), self.n_actions - 1))
             self.override_action = -1  # 本 tick 重定向，下 tick 元认知重新决定
+            # friend-audit 检验计数器：override 真实应用次数（无行为影响）
+            self._override_applied = getattr(self, '_override_applied', 0) + 1
         elif (self.body.is_sleeping
                 and getattr(self, 'override_action', -1) >= 0):
             # security warn 修复：睡眠时陈旧意图清除（防醒来后生效一 tick）
