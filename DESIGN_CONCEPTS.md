@@ -151,6 +151,7 @@
 | 现有元件 | 缺的接线 | 对应文献 |
 |----------|----------|----------|
 | curiosity_map（计数）| 接 world_model 误差下降率 | ICM / Oudeyer |
+| curiosity 主循环零调用 | 接主循环（`_curiosity_lp_enabled` 门控）——**✅ B1 已接线（13f0c7a，test_curiosity_lp.py A/B/C 全过）** | — |
 | sleep consolidate（均匀抽样）| 按 prediction_gap 加权 + 高误差多训 | CLS |
 | 单速率梯度更新 | 慢副本（EMA）+ 稳态门控学习率 | meta-RL / Hubel |
 | AttentionGate（特征加权）| 移动效用加 epistemic 项 | active inference |
