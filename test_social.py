@@ -137,7 +137,9 @@ class World2:
             # 离开食物格：清工作标记（但保留该格进度？不——离开即重置，
             # 防止"碰一下"累积；下次回来重新工作）
             self._worked_food[who] = None
-        return -0.002  # 移动代谢
+        # 代谢：停留（动作 0）轻劳动 -0.001，移动 -0.002（生物学合理：
+        # 静止代谢低于移动——工作期间能量消耗减半，解锁共存判据）
+        return -0.001 if action == 0 else -0.002
 
     def spacing(self):
         return abs(self.pos_a[0] - self.pos_b[0]) \
@@ -162,12 +164,15 @@ class GoalPersistence:
       - 能量危机（<0.2 强制换路）
       - 他者抢占同一食物（冲突）
     可开关（goal_enabled on/off 对照）"""
-    def __init__(self, surprise_threshold=0.6, energy_floor=0.2):
+    def __init__(self, surprise_threshold=0.8, energy_floor=0.1,
+                 abandon_cooldown=20):
         self.target = None          # 当前目标食物格 (x,y)
         self.progress_seen = 0      # 已见最大进度
         self.stall_ticks = 0        # 进度停滞 tick 数
         self.surprise_threshold = surprise_threshold
         self.energy_floor = energy_floor
+        self.abandon_cooldown = abandon_cooldown  # 放弃后冷却（防死磕循环）
+        self.cooldown_left = 0
         self.abandoned = 0          # 放弃计数（诚实记录）
         self.completed = 0          # 完成计数
         self.stick_actions = 0      # 坚持动作数
@@ -187,8 +192,14 @@ class GoalPersistence:
         review blocking 修复：非坚持返回 None 哨兵（原返回 last_action=0
         被误判为坚持 → override 恒 0 → AGI 永久停留原地，sc21/sc22 数据作废）"""
         on_food = tuple(pos) in [tuple(f) for f in env.foods]
+        # 冷却递减（放弃后避免立即死磕同一食物）
+        if self.cooldown_left > 0:
+            self.cooldown_left -= 1
         if on_food and env.gather_cost > 0:
             if self.target != tuple(pos):
+                if self.cooldown_left > 0:
+                    # 冷却期内不建立新目标（防死磕循环——稀缺配置根因）
+                    return None, False
                 self.target = tuple(pos)      # 新目标：进入坚持
                 self.progress_seen = 0
                 self.stall_ticks = 0
@@ -210,6 +221,7 @@ class GoalPersistence:
             if abandon:
                 self.abandoned += 1
                 self.target = None
+                self.cooldown_left = self.abandon_cooldown  # 冷却防死磕
                 return None, False            # 放弃：不覆盖（AGI 自主决策）
             # 坚持：停留工作
             self.stick_actions += 1
