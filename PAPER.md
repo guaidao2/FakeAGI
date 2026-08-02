@@ -945,12 +945,19 @@ RandomState 隔离后重测（future work）。
 `examples/train_world_model.py`（冻结编码器隔离验证）——**next_state loss
 19.1x 下降**，世界模型真实学习环境动力学。
 
-**② GrowingLLM 生长后新层参数脱优化器**（`Growing-LLM`）：
-`opt = AdamW(model.parameters())` 训练开始创建一次，`engine.step()` 生长
-添加的新层**永不注册进优化器**——梯度算了但永不应用（"新脑区"不学习，
-GLA 门控 g_proj 等全部失效）。修复：生长后参数 id diff →
-`add_param_group`（`verify_grow_opt.py` 验证：groups 1→2，生长后 loss
-20.5→8.38 优于修复前 11.37）。`train_r1.py` 补丁 `train_r1_fix.patch`。
+**② GrowingLLM 生长架构两个系统性缺陷**（`Growing-LLM`，深挖后比初版
+审计更深）：
+- **②a GLA 门控 g_proj 死参数**（`verify_gla_grad.py`）：`GLAAttention.
+  forward` 短序列（L < 512）走 FlashAttn 分支直接 return——`g_proj`
+  （门控）**从不执行、梯度永远 None**（训练序列 <512 时全部层的 g_proj
+  从未被更新——比"不在优化器"更深：连梯度都不产生）。修复：`force_gla`
+  透传，训练必须 `model(x, force_gla=True)`；验证：短默认 grad=None →
+  force_gla 后 1.7e-01/1.2e-01。
+- **②b 生长后新层参数脱优化器**（`verify_grow_opt.py`）：`engine.step()`
+  生长添加的新层**永不注册进优化器**——梯度算了但永不应用（"新脑区"
+  不学习）。修复：生长后参数 id diff → `add_param_group`；验证：groups
+  1→2，生长后 loss 20.5→8.38 优于修复前 11.37。
+- `train_r1.py` 补丁 `train_r1_fix.patch`（含两修复）。
 
 **③ FakeAGI override_action 死变量**（本仓库，`29ec4b0`+`55db434`）：
 `override_action` 只有赋值/清除、全文件无应用点——**元认知重定向意图
