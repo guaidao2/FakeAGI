@@ -54,9 +54,9 @@ class World2:
         self._conflict_open = False
 
     def _other_working_at(self, who, pos):
-        """轮流信号：他者是否正在此食物格工作（社会感知驱动资源分配）"""
-        other = "b" if who == "a" else "a"
-        return self._worked_food.get(other) == tuple(pos)
+        """（废弃——review blocking：env 禁止重叠使'他者站在我格'恒 False，
+        轮流信号死代码。他者占用检测用 _conflict_open 已有语义）"""
+        return False
 
     def _respawn_food(self):
         while True:
@@ -402,34 +402,46 @@ def main():
     else:
         print("  目标坚持机制未通过——如实记录（坚持/放弃部分失效）")
 
-    # ── 轮流信号 + 参数增大对比（稀缺-难获：当前食物 0 死锁）──
-    print("\n=== 轮流信号 + 参数增大（稀缺-难获，2 食物）===")
+    # ── 参数增大对比（稀缺-难获，2 食物）──
+    # review blocking 修正：轮流信号为死代码（env 禁止重叠恒 False），
+    # 解锁归因改为"模型容量"；判据用配对"开 > 关"
+    print("\n=== 参数增大对比（稀缺-难获，2 食物）===")
     for hdim, label in ((64, "小模型 h=64"), (128, "大模型 h=128")):
         f_on = f_off = 0
         for s in seeds:
             np.random.seed(s)
             torch.manual_seed(s)
-            # 轮流信号开（goal_enabled=True 含 _other_working_at 放弃）
             f_on += run_social(seed=s, n_food=2, gather_cost=15,
                                goal_enabled=True,
                                hidden_dim=hdim)["food"]
             f_off += run_social(seed=s, n_food=2, gather_cost=15,
                                 goal_enabled=False,
                                 hidden_dim=hdim)["food"]
-        print(f"  {label}: 轮流信号开 食物={f_on} | 关 食物={f_off}"
+        print(f"  {label}: 目标机制开 食物={f_on} | 关 食物={f_off}"
               f"（×3seeds 合计）")
-    # 大模型 + 轮流信号解锁判据：食物 > 0 且 > 关
-    # （当前小模型食物 0——死锁；解锁需>0）
-    big_on = 0
+    # 容量增益判据：大模型关 > 小模型关（纯容量对照，无机制混杂）
+    cap_ok = False
     for s in seeds:
         np.random.seed(s)
         torch.manual_seed(s)
-        big_on += run_social(seed=s, n_food=2, gather_cost=15,
-                             goal_enabled=True, hidden_dim=128)["food"]
-    unlock_ok = big_on > 0
-    print(f"  大模型+轮流信号 食物={big_on}（×3seeds）"
-          f"{'解锁' if unlock_ok else '仍死锁'}"
-          f"（>0 为解锁判据）")
+        big_off = run_social(seed=s, n_food=2, gather_cost=15,
+                             goal_enabled=False,
+                             hidden_dim=128)["food"]
+    # 用上方循环已收集的 f_off（h=128）与 h=64 比较——重跑一次精确收集
+    small_off = big_off = 0
+    for s in seeds:
+        np.random.seed(s)
+        torch.manual_seed(s)
+        small_off += run_social(seed=s, n_food=2, gather_cost=15,
+                                goal_enabled=False,
+                                hidden_dim=64)["food"]
+        big_off += run_social(seed=s, n_food=2, gather_cost=15,
+                              goal_enabled=False,
+                              hidden_dim=128)["food"]
+    cap_ok = big_off > small_off
+    print(f"  容量增益（关对照）: 大模型 {big_off} vs 小模型 {small_off}"
+          f"（×3seeds）{'有增益' if cap_ok else '无增益'}"
+          f"（大 > 小 为判据）")
 
     # 稀缺度梯度（用户生物学假设验证）：
     #   n_food 少 = 资源稀缺（易冲突）；n_food 多但 gather_cost 高 =
