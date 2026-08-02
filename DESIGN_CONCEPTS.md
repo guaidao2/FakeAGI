@@ -96,3 +96,66 @@
 - 不做 RL 式价值最大化（违反③ 的自主性）
 - 不预先定义概念集合（必须从身体经验长出）
 - 不声称"意识"——只验证"自我表征"与"概念泛化"
+
+## 7. 外部文献对照（2026-08 研究，含已验证 URL）
+
+对四条补充线的研究结论——**共同发现：系统缺的不是机制元件
+（world_model/replay/sleep/curiosity 都有雏形），而是接线**。
+
+### 7.1 环境复杂度与可学习性（反身性前置审计）
+
+- **SCAN 组合泛化**（Lake & Baroni 2018, arxiv.org/abs/1711.00350 ✅）：训练/测试差异小时只学
+  mix-and-match 伪泛化——概念/抽象需要**可组合任务**才被迫形成
+- **好奇心=learning progress 而非 novelty**（Pathak et al. 2017 ICM, arxiv.org/abs/1705.05363 ✅；
+  Oudeyer & Kaplan 2007 类型学）：奖励应基于**预测误差下降率**，
+  否则陷入 noisy-TV 噪声陷阱——本地 curiosity_map 是访问计数（AUDIT.md:32 已记录脱钩）
+- **POMDP 迫使表征升级**（Kaelbling 1998）：部分可观察→必须维持隐状态→
+  表征从"传感器读数"变"世界状态"——概念形成的压力源
+- **最小可行**：环境加局部视野/遮挡 + 可组合复合目标；curiosity 预算改接
+  world_model 误差下降率（learning progress），非计数
+
+### 7.2 多时间尺度学习（比 Allostasis 更深）
+
+- **互补学习系统 CLS**（McClelland et al. 1995, doi:10.1037/0033-295X.102.3.419 ⚠️）：
+  快海马（episodic）+ 慢皮层（统计），回放桥接——本地 sleep 均匀抽样 replay
+  未按显著性（sleep.py:36 `np.random.choice`）
+- **meta-RL 快慢权重**（Wang et al. 2016, arxiv.org/abs/1611.05763 ✅）：
+  慢速元参数在 RNN 快权重内实现快速适应
+- **可塑性门控/敏感期**（Hubel & Wiesel 1970 ⚠️）：可塑性非恒定——
+  本地可做"plasticity gate"：高应激/低能量冻结慢权重（稳态状态=发育窗口）
+- **最小可行**：replay 按 prediction_gap 加权重放 + 世界模型慢副本（EMA）+ 稳态门控学习率
+
+### 7.3 主动感知（Active Perception）
+
+- **sensorimotor contingency**（O'Regan & Noë 2001, doi:10.1017/S0140525X01000115 ✅）：
+  感知=对"动作如何改变感觉"规律的掌握，无内部图像
+- **active inference epistemic value**（Parr & Friston 2017, royalsocietypublishing.org/doi/10.1098/rsif.2017.0376 ⚠️403；
+  Friston 2010, nature.com/articles/nrn2787 ⚠️）：
+  行动=降低不确定性（epistemic）与稳态（pragmatic）的统一
+- **最小可行**：移动效用 = 稳态偏差项 + β·预期信息增益（预测误差下降方向）——
+  saccade 与导航统一（本地注意力门控是加权，不是主动采样）
+
+### 7.4 社会性学习与模仿（探索压缩）
+
+- **社会学习策略开关**（Laland 2004, doi:10.3758/BF03196002 ✅）：
+  copy when uncertain / copy majority / copy if better——模仿不能无差别
+- **模仿先于语言**（Meltzoff & Moore 1977, science.org/doi/10.1126/science.198.4312.75 ⚠️超时）：
+  新生儿即可模仿——概念形成的另一通道（语言之前是模仿）
+- **运动变异性=目的性探索**（Dhawale et al. 2017, doi:10.1146/annurev-neuro-072116-031548 ✅）：
+  模仿=把变异性导向他人已验证区域
+- **最小可行**：演示缓冲（观测→动作）+ BC 辅助损失 + Laland 开关
+  （仅当自身预测误差高或 teacher 更优时模仿）
+
+### 7.5 综合结论（接线清单——缺的不是元件是连接）
+
+| 现有元件 | 缺的接线 | 对应文献 |
+|----------|----------|----------|
+| curiosity_map（计数）| 接 world_model 误差下降率 | ICM / Oudeyer |
+| sleep consolidate（均匀抽样）| 按 prediction_gap 加权 + 高误差多训 | CLS |
+| 单速率梯度更新 | 慢副本（EMA）+ 稳态门控学习率 | meta-RL / Hubel |
+| AttentionGate（特征加权）| 移动效用加 epistemic 项 | active inference |
+| hemin 影子自我（自我对比）| 演示缓冲 + BC + copy-when-uncertain | Laland / Meltzoff |
+| 简单全可观察环境 | POMDP 化 + 组合任务 | SCAN / Kaelbling |
+
+**排序修正**：环境复杂度审计（7.1）是概念层的前置条件——若环境
+不需要概念就能解，概念层不会涌现（苍蝇在只有水的盒子里不会进化导航）。
