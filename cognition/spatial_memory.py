@@ -108,14 +108,16 @@ class SpatialMemory:
                 ③无候选 → None（调用方随机回退）
         """
         rng = rng or np.random
+        env_size = max(int(env_size), 1)  # should-fix：防御 env_size<=0
         # ① 从未访问：边界内随机采样，排除已访问节点
         if len(self.nodes) < env_size * env_size:
             for _ in range(30):
-                tx = int(rng.randint(0, env_size))
-                ty = int(rng.randint(0, env_size))
+                tx = rng.randint(0, env_size)
+                ty = rng.randint(0, env_size)
                 if (tx, ty) not in self.nodes:
                     return [tx, ty]
-        # ② 已访问中选信息增益最高
+        # ② 已访问中选信息增益最高（阈值 0.3：全高熟悉度时返回 None →
+        #    调用方随机回退分支真实可达，非死代码）
         best, best_score = None, -1.0
         for pos, node in self.nodes.items():
             if agent_pos is not None and pos == tuple(agent_pos):
@@ -126,7 +128,7 @@ class SpatialMemory:
             dist_pref = (1.0 if env_size * 0.15 <= dist <= env_size * 0.5
                          else 0.3)
             score = unfamiliar * 0.5 + node.avg_surprise * 0.3 + dist_pref * 0.2
-            if score > best_score:
+            if score > best_score and score >= 0.3:
                 best = list(pos)
                 best_score = score
         return best  # None → 调用方随机回退
