@@ -28,12 +28,26 @@ class SleepCycle:
         return (fatigue < 0.2 and self.sleep_duration > 20) or (energy > 1.5 and fatigue < 0.5)
     
     def consolidate(self, replay_buffer: list) -> list:
-        """睡眠巩固：重放经验并返回巩固后的记忆"""
+        """睡眠巩固：重放经验并返回巩固后的记忆。
+        B2 接线（DESIGN_CONCEPTS §7.5/CLS）：按显著性加权重放——
+        高 surprise（预测误差大=信息量高）的经验优先重放（原均匀抽样
+        np.random.choice——没有重要性概念）。"""
         if not replay_buffer:
             return []
         
         n = min(32, len(replay_buffer))
-        indices = np.random.choice(len(replay_buffer), n, replace=False)
+        # 显著性权重：surprise 高的经验优先（+0.1 保底防零权重）
+        weights = []
+        for item in replay_buffer:
+            if isinstance(item, dict):
+                s = float(item.get("surprise", 0.0))
+            else:
+                s = getattr(item, "surprise", 0.0) or 0.0
+            weights.append(0.1 + s)
+        total = sum(weights)
+        probs = [w / total for w in weights]
+        indices = np.random.choice(len(replay_buffer), n, replace=False,
+                                   p=probs)
         
         # 对采样的经验做"巩固"（模拟重放）
         consolidated = []

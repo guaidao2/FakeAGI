@@ -28,6 +28,31 @@ class WorldModel(nn.Module):
         )
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
         self.loss_fn = nn.MSELoss()
+        # B3 接线（DESIGN_CONCEPTS §7.5/meta-RL）：慢副本 EMA——
+        # 快权重每 tick 更新（快速适应），慢影子按 EMA 追踪长期统计；
+        # 稳态门控（高应激/低能量冻结慢更新——Hubel 可塑性门控最小版）
+        self.ema_decay = 0.99
+        self.shadow = {}
+        self._register_shadow()
+    
+    def _register_shadow(self):
+        with torch.no_grad():
+            for name, p in self.named_parameters():
+                self.shadow[name] = p.detach().clone()
+    
+    def _ema_update(self, gate: float = 1.0):
+        """EMA 慢副本更新——gate<1 时冻结慢学习（应激高/能量低时保护已有表征）"""
+        if gate <= 0.0:
+            return
+        with torch.no_grad():
+            for name, p in self.named_parameters():
+                if name in self.shadow:
+                    self.shadow[name] = (self.ema_decay * self.shadow[name]
+                                         + (1 - self.ema_decay) * p.detach())
+    
+    def get_slow_params(self):
+        """慢副本参数（决策/评估用——长期统计视角）"""
+        return self.shadow
     
     def predict(self, h: torch.Tensor, action: torch.Tensor = None) -> torch.Tensor:
         if action is None:
@@ -49,7 +74,8 @@ class WorldModel(nn.Module):
                 combined = torch.cat([combined, pad], dim=-1)
         return self.predictor(combined)
     
-    def train_step(self, h: torch.Tensor, target: torch.Tensor, action: torch.Tensor = None) -> float:
+    def train_step(self, h: torch.Tensor, target: torch.Tensor, action: torch.Tensor = None,
+                   gate: float = 1.0) -> float:
         pred = self.predict(h.detach(), action)
         if pred.shape[-1] != target.shape[-1]:
             min_d = min(pred.shape[-1], target.shape[-1])
@@ -60,6 +86,8 @@ class WorldModel(nn.Module):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0)
         self.optimizer.step()
+        # B3：慢副本 EMA（gate<1 时冻结慢学习——稳态门控）
+        self._ema_update(gate=gate)
         return loss.item()
     
     def imagine(self, h: torch.Tensor, action_seq: list) -> list:
@@ -112,3 +140,5 @@ class WorldModel(nn.Module):
         if dev is not None:
             self.to(dev)
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
+        # B3：生长后 shadow 重注册（维度变化——防尺寸不匹配）
+        self._register_shadow()

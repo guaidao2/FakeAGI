@@ -1,0 +1,65 @@
+"""
+B3 接线验证：世界模型慢副本 EMA + 稳态门控（meta-RL/Hubel，
+DESIGN_CONCEPTS §7.5）
+
+验证：
+  A. EMA 追踪：多步训练后 shadow 接近当前权重（0.99 decay 滞后）
+  B. 门控冻结：gate=0 时 shadow 不变（应激高/能量低保护已有表征）
+  C. grow 后重注册：shadow 尺寸与模型一致（防维度不匹配）
+"""
+import sys
+import torch
+import torch.nn.functional as F
+from cognition.temporal.world_model import WorldModel
+
+
+def diff(a, b):
+    return float(torch.abs(a - b).sum())
+
+
+def run():
+    torch.manual_seed(0)
+    wm = WorldModel(input_dim=32, n_actions=5)
+
+    # A：训练 50 步（固定目标让权重漂移），shadow 应滞后跟随
+    h = torch.randn(4, 32)
+    target = torch.randn(4, 32)
+    act = torch.zeros(4, dtype=torch.long)
+    for _ in range(50):
+        wm.train_step(h, target, act, gate=1.0)
+    d_after = diff(wm.shadow["predictor.0.weight"],
+                   wm.predictor[0].weight)
+    print(f"  A: 50 步后 shadow vs 当前 差={d_after:.4f} "
+          f"(EMA 0.99 滞后应显著>0 但同量级)")
+    ok_a = d_after > 1e-6 and d_after < diff(
+        wm.shadow["predictor.0.weight"], torch.zeros_like(
+            wm.shadow["predictor.0.weight"]))
+    print(f"     {'OK（EMA 慢副本追踪）' if ok_a else 'FAIL'}")
+
+    # B：gate=0 冻结——记录 shadow，再训练 10 步 gate=0，shadow 不变
+    before = wm.shadow["predictor.0.weight"].clone()
+    for _ in range(10):
+        wm.train_step(h, target, act, gate=0.0)
+    d_gate = diff(before, wm.shadow["predictor.0.weight"])
+    print(f"  B: gate=0 训练 10 步 shadow 变化={d_gate:.6f}")
+    ok_b = d_gate == 0.0
+    print(f"     {'OK（稳态门控冻结慢学习）' if ok_b else 'FAIL'}")
+
+    # C：grow 后 shadow 重注册
+    wm.grow(48)
+    shape_ok = (wm.shadow["predictor.0.weight"].shape
+                == wm.predictor[0].weight.shape)
+    print(f"  C: grow 后 shadow 形状 {wm.shadow['predictor.0.weight'].shape}"
+          f" vs 模型 {wm.predictor[0].weight.shape}")
+    ok_c = shape_ok
+    print(f"     {'OK（生长后重注册）' if ok_c else 'FAIL'}")
+
+    ok = ok_a and ok_b and ok_c
+    verdict = ("OK（B3 接线完成：慢副本 EMA + 稳态门控 + 生长重注册）"
+               if ok else "FAIL")
+    print("\n判定: " + verdict)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(run())

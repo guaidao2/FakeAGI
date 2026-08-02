@@ -302,8 +302,18 @@ class CognitionPipeline:
                 error_path = "perception"
             
             # 感知通路：更新世界模型（置信度门控，条件于动作）
+            # B3：稳态门控——应激高/能量低时冻结慢学习（保护已有表征）
+            gate = 1.0
+            try:
+                b = self.agi.body if hasattr(self, 'agi') and self.agi else None
+                if b is not None:
+                    gate = max(0.0, 1.0 - b.stress * 2.0
+                               - max(0.0, 0.3 - b.energy) * 3.0)
+            except Exception:
+                pass
             world_loss = self.world_model.train_step(
-                prev_h.detach(), self.hidden.detach(), action=act_t)
+                prev_h.detach(), self.hidden.detach(), action=act_t,
+                gate=gate)
             
             # P1b: 多专家世界模型分情境训练（若 MoE 激活可用）
             try:
