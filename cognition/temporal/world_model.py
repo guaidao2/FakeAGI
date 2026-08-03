@@ -172,6 +172,9 @@ class WorldModel(nn.Module):
             self.value_head.weight[:, :h] = old_vw[:, :h]
             if old_vb is not None:
                 self.value_head.bias[:] = old_vb[:]
+        # should-fix：value_head 创建于 CPU——补 .to(dev)（grow 后 cuda 必崩）
+        if dev is not None:
+            self.value_head.to(dev)
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
         # B3：生长后 shadow 重注册（维度变化——防尺寸不匹配）
         self._register_shadow()

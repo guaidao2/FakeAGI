@@ -197,8 +197,10 @@ class SuperpositionWorldModel(nn.Module):
         with torch.no_grad():
             for p in child.parameters():
                 p.add_(torch.randn_like(p) * 0.02)
-        child.amplitude = torch.tensor(parent.amplitude.item() * 0.6,
-                                       device=dev if dev is not None else None)
+        # should-fix：copy_ 保持 buffer 注册（直接赋值会替换成普通属性，
+        # state_dict 序列化/加载丢失分支统计——与 collapse:132 一致）
+        child.amplitude.copy_(torch.tensor(parent.amplitude.item() * 0.6,
+                                           device=child.amplitude.device))
         self.branches.append(child)
         # 重建优化器：新分支参数必须进入 param_groups（否则永不更新）
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
@@ -251,9 +253,10 @@ class SuperpositionWorldModel(nn.Module):
         with torch.no_grad():
             for i, b in enumerate(self.branches):
                 old = old_states[i]
-                b.amplitude = torch.tensor(old_amps[i], device=dev)
-                b.hit_count = torch.tensor(old_hits[i], device=dev)
-                b.miss_count = torch.tensor(old_misses[i], device=dev)
+                # should-fix：copy_ 保持 buffer 注册（直接赋值丢 state_dict）
+                b.amplitude.copy_(torch.tensor(old_amps[i], device=b.amplitude.device))
+                b.hit_count.copy_(torch.tensor(old_hits[i], device=b.hit_count.device))
+                b.miss_count.copy_(torch.tensor(old_misses[i], device=b.miss_count.device))
                 for key in old:
                     if key in b.state_dict():
                         o = old[key].to(dev)  # 旧权重迁到目标设备
