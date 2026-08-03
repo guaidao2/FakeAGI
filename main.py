@@ -862,6 +862,7 @@ class AGI:
                     _, _, danger_matched, _ = self.concept_bank.match_concept(
                         obs, kind="danger", threshold=0.35)
                     if not danger_matched:
+                        # 安全分支：无威胁 → 停留尝试交互
                         # nit：封顶——匹配持续满足时计数器不再无界增长
                         self._concept_stay = min(getattr(self, '_concept_stay', 0) + 1,
                                                  getattr(self, '_concept_stay_max', 5) + 1)
@@ -874,11 +875,16 @@ class AGI:
                                 and self.body.energy <= stay_start_e + 0.005):
                             self._concept_stay = 0  # 放弃（探索损失最小）
                             self._concept_stay_start_e = None
+                        else:
+                            if self._concept_stay == 1:
+                                self._concept_stay_start_e = self.body.energy
+                            if self._concept_stay <= getattr(self, '_concept_stay_max', 5):
+                                action = 0  # 停留尝试交互（吃到则 V 上升）
                     else:
-                        if self._concept_stay == 1:
-                            self._concept_stay_start_e = self.body.energy
-                        if self._concept_stay <= getattr(self, '_concept_stay_max', 5):
-                            action = 0  # 停留尝试交互（吃到则 V 上升）
+                        # 危险分支（review blocking 修复：原语义反转——
+                        # 危险时反而停留！）：威胁区不逗留——清计数恢复自主
+                        self._concept_stay = 0
+                        self._concept_stay_start_e = None
                 else:
                     self._concept_stay = 0
             except Exception:
@@ -1002,18 +1008,6 @@ class AGI:
                 v_now = (self.body.energy / 2.0 + self.body.water) / 2.0
                 cname = self.concept_bank.add_value_anchored(
                     np.asarray(obs, dtype=np.float32), True, v=v_now)
-                # ⑧ 负价值锚（对称压缩）：伤害事件（能量大幅下降/健康受损）
-                # → 观测进入 "danger" 簇（"什么会死"与"什么能活"同等重要）
-                v_down = (env_energy < -0.05
-                          or (self.body.health
-                              < getattr(self, '_last_health', 1.0) - 0.02))
-                if v_down:
-                    try:
-                        self.concept_bank.add_danger_anchored(
-                            np.asarray(obs, dtype=np.float32), True)
-                    except Exception:
-                        pass
-                self._last_health = self.body.health
                 # ③ 符号化：概念激活时同时出现的语言 token → 共现绑定
                 # （Hebbian——"食物概念 ↔ 'food' 词"从经验长出）
                 # review 修复：窗口化（原"吃食 tick==广播 tick"概率
@@ -1026,6 +1020,20 @@ class AGI:
                             cname, getattr(self, '_last_lang_tokens', []))
                     except Exception:
                         pass
+            # ⑧ 负价值锚（对称压缩）：伤害事件（能量大幅下降）→ 观测
+            # 进入 "danger" 簇（"什么会死"与"什么能活"同等重要）
+            # review blocking 修复链：①原嵌 if v_up 内→移出；②health
+            # 条件误伤（饥饿也降 health）→去；③阈值 -0.02 太严（E14
+            # 威胁伤害仅 -0.01 不触发→danger 不形成→威胁检查空转→
+            # 概念驱动照旧拖累 1.2）→降到 -0.005（代谢 -0.002/喝水
+            # -0.0005 不触发，威胁 -0.01 触发）
+            v_down = env_energy < -0.005
+            if v_down:
+                try:
+                    self.concept_bank.add_danger_anchored(
+                        np.asarray(obs, dtype=np.float32), True)
+                except Exception:
+                    pass
             # 每 300 tick 生成一次组合式反事实（记录为内部"假设场景"）
             if self.tick % 300 == 0:
                 combo = self.concept_bank.generate_combo(n=3)
