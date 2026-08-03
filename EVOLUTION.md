@@ -19,6 +19,9 @@
 > - ✅ **接线 B1-B3（DESIGN_CONCEPTS §7.5 清单，2026-08）**：B1 curiosity→learning progress（9610563——原 CuriosityManager 主循环零调用+计数非进展率；接线级验证 D：world_loss 流入 50 条；注 world_loss 变化 0.0000=信号空转实证）；B2 sleep 按 surprise 加权重放（241b940——27% vs 10% 基线，CLS）；B3 世界模型慢副本 EMA+稳态门控（241b940+90e7c30——A/B/C/D 全过；review blocking×2：set_cognition 挂 agi 引用（门控原恒 1.0 死代码）+ EMA 设备惰性重注册）。B4 epistemic 部分接线（空间记忆引导已有）、B5 模仿待 teacher。**教训：接线没验证=等于没接（三次静默失效均 review 抓出）**
 > - ✅ **A 步骤信号空转修复（f3e44de+81cf190+acc237b）**：世界模型价值头 ΔV 预测（基类+叠加态多假设坍缩）——dv 观测时点差值（review blocking：原 body._prev 含已注入奖励→ΔV 被 baseline 吸收近似空转；现 dv 含奖励 0.2×5→1.0）；info 缺 world_loss 键修复（main 恒取 0.5 默认值）；security：grow 后 value_head 重置 + dv numel 校验。**验证：world_loss 从恒 0.5 → 真实波动（2.86-6.78 含奖励内容）——信号空转修复达成；收敛未证实（loss 波动大——下阶段学习率/归一化调优）**
 > - ✅ **B 环境升级最小版（4f99e3f）**：POMDP 化（隐藏状态：开关解锁食物）——**t=1050 学会踩开关解锁+吃食物（隐状态维持成功）**，world_loss 有内容（1.12~26.32）——概念层压力源建立（SCAN 前置条件）
+> - ✅ **装配后回归（d3af558）**：E2 B WARN→OK、E6 **OK 113 tick（历史最快 15x）**、E14 判定翻转 FAIL（全模块 1.6±1.0 vs 对照 3.4±2.7——对照从恒 0.0→3.4）——**装配+燃料生效（行为真实变化）**，全模块组合需调优
+> - ✅ **收敛调优（a49618e）**：ΔV 稀疏（95%≈0）→价值水平 V（稠密平滑）；value_mse 收敛（0.013-0.019）✅ + 食物 18 次 ✅；world_loss 涨=hidden 漂移（LNN 范数 48→65——独立课题）
+> - ✅ **概念层阶段 1（b5cf7be）**：价值锚聚类（`test_concept_value.py`）——概念=观测簇×价值绑定：聚类有效（0.48 vs 2.74）+ **跨形态泛化**（新形态正 0.82 vs 负 2.86 被识别为可消耗物）；发现：纯外观聚类 FAIL→价值模式共享才泛化（解释路线 B 挣扎根源）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
