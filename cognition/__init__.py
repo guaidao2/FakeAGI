@@ -311,21 +311,15 @@ class CognitionPipeline:
                     # nit：clamp 上下限（gate ∈ [0,1]）
                     gate = min(1.0, max(0.0, 1.0 - b.stress * 2.0
                                         - max(0.0, 0.3 - b.energy) * 3.0))
-                    # A 步骤：价值变化目标（review blocking 修复——
-                    # dv 取"观测时点"差值：缓存上一 tick process 时的
-                    # energy/water（不含当时奖励），本次差值 = 上 tick
-                    # 奖励（食物/撞锁/代谢）——body.update 内记录会
-                    # 含已注入奖励，ΔV 被 baseline 吸收（近似空转）
-                    prev_e = getattr(self, '_prev_body_energy', b.energy)
-                    prev_w = getattr(self, '_prev_body_water', b.water)
-                    dv = ((b.energy - prev_e) * 5.0
-                          + (b.water - prev_w) * 5.0)
-                    dv_target = torch.tensor(
-                        [float(max(-1.0, min(1.0, dv)))],
+                    # A 步骤：价值目标（收敛调优——ΔV 稀疏[95%≈0]导致
+                    # value_head 学恒 0；改预测**价值水平 V**=归一化
+                    # 身体状态——稠密平滑目标（"预测身体"哲学）
+                    v = (b.energy + b.water) / 2.0
+                    v_target = torch.tensor(
+                        [float(max(0.0, min(1.0, v)))],
                         dtype=torch.float32,
                         device=next(self.world_model.parameters()).device)
-                    self._prev_body_energy = b.energy
-                    self._prev_body_water = b.water
+                    dv_target = v_target  # 复用 dv_target 参数名（V 水平）
             except Exception:
                 pass
             world_loss = self.world_model.train_step(
