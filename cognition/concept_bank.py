@@ -25,9 +25,24 @@ class Concept:
         self.kind = kind          # 类型（object/place/action/state）
         self.vector = vector      # 概念向量（连续表示）
         self.freq = freq          # 出现频率
+        # ①+② 概念价值预测（DESIGN_CONCEPTS §3 阶段 2 前置）：
+        # 概念伴随的 V 值 EMA——预测"这个可消耗物值多少"
+        self.value_ema = 0.5      # 初始中性（V∈[0,1]）
+        self.value_count = 0
+        self.value_history = deque(maxlen=20)
+
+    def predict_value(self) -> float:
+        """预测该概念的价值（出现时 V 的 EMA）——引导条件用"""
+        return self.value_ema
+
+    def update_value(self, v: float):
+        """记录该概念出现时的 V 值（在线 EMA，α=0.2）"""
+        self.value_count += 1
+        self.value_history.append(v)
+        self.value_ema = 0.8 * self.value_ema + 0.2 * float(v)
     
     def __repr__(self):
-        return f"[Concept {self.kind}:{self.name} f={self.freq}]"
+        return f"[Concept {self.kind}:{self.name} f={self.freq} v={self.value_ema:.2f}]"
 
 
 class ConceptBank:
@@ -68,10 +83,12 @@ class ConceptBank:
             self.concepts.append(concept)
 
     # ─── 概念层接入（DESIGN_CONCEPTS §3 阶段 1：价值锚聚类）───
-    def add_value_anchored(self, obs: np.ndarray, v_up: bool) -> str:
+    def add_value_anchored(self, obs: np.ndarray, v_up: bool,
+                           v: float = None) -> str:
         """价值锚聚类：V 上升事件更新"可消耗物"概念簇。
         概念 = 观测簇 × 价值绑定——只有 V 上升的观测进簇。
         返回概念名（"consumable_N"）或空串。
+        v：出现时的身体价值（用于概念价值预测——①+②）。
         验证见 test_concept_value.py（跨形态泛化成立）。"""
         if not v_up or obs is None or len(obs) == 0:
             return ""
@@ -87,14 +104,19 @@ class ConceptBank:
                 if d < best_d:
                     best_i, best_d = i, d
         if best_i >= 0 and best_d < 1.5:
-            # 更新质心（在线 k-means）+ 增强频率
+            # 更新质心（在线 k-means）+ 增强频率 + 价值 EMA
             self.concepts[best_i].vector = (0.9 * self.concepts[best_i].vector
                                             + 0.1 * vec)
             self.concepts[best_i].freq += 1
+            if v is not None:
+                self.concepts[best_i].update_value(v)
             return self.concepts[best_i].name
         if len(self.concepts) < self.max_concepts:
             name = f"consumable_{len(self.concepts)}"
-            self.concepts.append(Concept(name, "consumable", vec.copy()))
+            c = Concept(name, "consumable", vec.copy())
+            if v is not None:
+                c.update_value(v)
+            self.concepts.append(c)
             return name
         return ""
     
@@ -102,11 +124,11 @@ class ConceptBank:
     def match_concept(self, obs: np.ndarray, kind: str = "consumable",
                       threshold: float = 1.5):
         """观测→概念匹配：找与 obs 最相似的概念（欧氏距离，与
-        add_value_anchored 同度量）。返回 (name, dist, matched)——
-        匹配则 matched=True（当前环境特征"像"该概念）。
-        概念驱动行为用：匹配 consumable → 引导停留/交互倾向。"""
+        add_value_anchored 同度量）。返回 (name, dist, matched,
+        value_pred)——匹配则 matched=True；value_pred=该概念的价值
+        预测（①+②：预测驱动引导——"像 + 预测值高"才停留）。"""
         if obs is None or len(obs) == 0:
-            return "", 1e9, False
+            return "", 1e9, False, 0.0
         vec = np.asarray(obs, dtype=np.float32).flatten()
         dim = vec.shape[0]
         best_i, best_d = -1, 1e9
@@ -116,6 +138,8 @@ class ConceptBank:
                 if d < best_d:
                     best_i, best_d = i, d
         if best_i >= 0 and best_d < threshold:
+            return (self.concepts[best_i].name, best_d, True,
+                    self.concepts[best_i].predict_value())
             return self.concepts[best_i].name, best_d, True
         return "", best_d, False
 

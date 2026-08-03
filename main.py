@@ -813,7 +813,10 @@ class AGI:
                 # 在食物旁时 energy 通常高（刚吃过），饿到 <0.5 时
                 # 已远离食物——互斥永不触发！<1.5="还能吃"→
                 # 周期性采集行为：满 2.0 离开，降到 1.5 回来停吃）
-                if matched[2] and self.body.energy < 1.5:
+                if (matched[2] and matched[3] > 0.55
+                        and self.body.energy < 1.5):
+                    # ① 预测驱动：不只"像"可消耗物——概念价值预测
+                    # （出现时 V 的 EMA）>0.55 才停（"像 + 值高"）
                     # nit：封顶——匹配持续满足时计数器不再无界增长
                     self._concept_stay = min(getattr(self, '_concept_stay', 0) + 1,
                                              getattr(self, '_concept_stay_max', 5) + 1)
@@ -915,8 +918,10 @@ class AGI:
             # 吃食时刻——<3 会污染后续移动后观测；energy_delta 是代谢默认值）
             v_up = (self.tick == getattr(self, '_food_recently_tick', -1000))
             if v_up:
+                # ①+②：传当前 V 值（概念价值预测——predict_value 引导用）
+                v_now = (self.body.energy / 2.0 + self.body.water) / 2.0
                 self.concept_bank.add_value_anchored(
-                    np.asarray(obs, dtype=np.float32), True)
+                    np.asarray(obs, dtype=np.float32), True, v=v_now)
             # 每 300 tick 生成一次组合式反事实（记录为内部"假设场景"）
             if self.tick % 300 == 0:
                 combo = self.concept_bank.generate_combo(n=3)
