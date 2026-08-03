@@ -28,8 +28,10 @@ FakeAGI 是一个基于自维持哲学的通用认知架构实验性实现。它
 > **2026-08 装配里程碑**：从"零件测试"进入"装配+燃料"——B1-B3 接线
 > （curiosity→learning progress / sleep 显著性重放 / 慢副本+稳态门控）
 > + A 价值信号（世界模型预测身体价值）+ B POMDP 环境 + 概念层阶段 1
-> （价值锚聚类）。**回归实证**：E2 B WARN→OK、E6 113 tick（历史最快）、
-> E14 对照反超（组合调优课题）。详见 [`DESIGN_CONCEPTS.md`](DESIGN_CONCEPTS.md)
+> （价值锚聚类）+ **概念层接主循环**（consumable 簇从身体经验长出）。
+> **回归实证**：E2 B WARN→OK、E6 113 tick（历史最快）、E14 对照反超
+> （组合调优课题）；E14 消融无拖累线（full 最优、他者贡献最大）。
+> 详见 [`DESIGN_CONCEPTS.md`](DESIGN_CONCEPTS.md)
 > 与 [`results_assembly.md`](results_assembly.md)。
 
 ## 架构概览

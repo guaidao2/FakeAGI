@@ -154,7 +154,7 @@
 | curiosity 主循环零调用 | 接主循环（`_curiosity_lp_enabled` 门控）——**✅ B1 已接线（9610563，test_curiosity_lp.py A/B/C/D 全过；注：world_loss 变化 0.0000=信号空转实证 §8——接线已通，信号质量待世界模型修复）** | — |
 | sleep consolidate（均匀抽样）| 按 prediction_gap 加权重放——**✅ B2 已接线（241b940，test_sleep_priority.py：高 surprise 27% vs 均匀 10% 基线）** | CLS |
 | 单速率梯度更新 | 慢副本（EMA）+ 稳态门控学习率——**✅ B3 已接线（241b940 + 90e7c30，test_wm_slow.py A/B/C/D 全过：EMA 追踪/门控冻结 0.000000/生长重注册/cuda 惰性重注册；review blocking 修复：set_cognition 挂 agi 引用（门控原恒 1.0 死代码）+ EMA 设备惰性重注册）** | meta-RL / Hubel |
-| 世界模型预测观测（恒 0.5 兜底）| **预测价值 V 水平——✅ A 步骤已接线（f3e44de+81cf190+acc237b+a49618e+41fe394，价值头基类+叠加态多假设坍缩；dv 观测时点差值+ΔV→V 水平稠密目标+归一化 energy/2 修复（review blocking：原 (energy+water)/2 健康态恒 1.0 学恒 1 饱和伪象）；验证：world_loss 恒 0.5→真实波动含奖励；value_mse 收敛需归一化修复后重验；食物 18 次行为提升；hidden 漂移独立课题）** | Active Inference / §8 信号空转 |
+| 世界模型预测观测（恒 0.5 兜底）| **预测价值 V 水平——✅ A 步骤已接线（f3e44de+81cf190+acc237b+a49618e+41fe394+a538327，价值头基类+叠加态多假设坍缩；dv 观测时点差值+ΔV→V 水平稠密目标+归一化 energy/2 修复；验证：world_loss 恒 0.5→真实波动含奖励；收敛重验：value_mse 37x 下降但 B FAIL 学恒均值（收敛≠学对——判别力判据抓到伪象，输入信号 pred.detach() 待改进）；hidden 漂移独立课题）** | Active Inference / §8 信号空转 |
 | AttentionGate（特征加权）| 移动效用加 epistemic 项——**🔄 B4 部分接线**（空间记忆引导 get_exploration_target 已实现——探索目标去未访问/高惊奇区域；learning progress 已接好奇心——"去最值得采样处"的方向性已具备；完整"移动效用=稳态+β·信息增益"待做） | active inference |
 | hemin 影子自我（自我对比）| 演示缓冲 + BC + copy-when-uncertain——**⏳ B5 待 teacher 环境**（需多智能体/示范者提供（观测→动作）序列；主循环他者默认关，test_social 有雏形） | Laland / Meltzoff |
 | 简单全可观察环境 | POMDP 化 + 组合任务——**✅ B 最小版已接线（4f99e3f，test_pomdp_env.py：隐藏状态开关解锁——t=1050 学会踩开关+吃食物，隐状态维持成功；概念层压力源建立）** | SCAN / Kaelbling |
