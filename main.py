@@ -806,9 +806,10 @@ class AGI:
         elif (not self.body.is_sleeping
                 and getattr(self, '_concept_drive_enabled', True)):
             try:
-                # 匹配阈值 0.8（默认 1.5 过宽——"有点像"就停=误停
-                # 浪费探索 tick→死亡增加；0.8=确实在可消耗物旁）
-                matched = self.concept_bank.match_concept(obs, threshold=0.8)
+                # 匹配阈值 0.35（review warn 根因：0.8 观测空间≈5 格，
+                # 与吃判定 <3 格口径错位——5 格外就停→探索损失→D 不利。
+                # 0.35≈3 格内才匹配——与吃判定对齐）
+                matched = self.concept_bank.match_concept(obs, threshold=0.35)
                 # 触发条件 energy<1.5（非极饿 0.5——设计缺陷修复：
                 # 在食物旁时 energy 通常高（刚吃过），饿到 <0.5 时
                 # 已远离食物——互斥永不触发！<1.5="还能吃"→
