@@ -60,14 +60,19 @@ def main():
     # C：跨概念价值区分（概念预测是概念级 EMA——同概念内恒定，
     # 组内相关无意义；跨概念：高价值概念预测显著高于低价值，
     # 且各自样本量充足（value_count ≥ 10——EMA 已收敛））
-    ca = next(c for c in cb.concepts if c.value_count > 0 and
-              abs(c.vector[0] - obs_a[0][0]) < 0.5)
-    cb2 = next(c for c in cb.concepts if c is not ca)
-    print(f"  C: 高价值概念 {ca.value_ema:.3f} (n={ca.value_count}) "
-          f"vs 低价值概念 {cb2.value_ema:.3f} (n={cb2.value_count})")
-    ok_c = (ca.value_ema - cb2.value_ema > 0.2
-            and ca.value_count >= 10 and cb2.value_count >= 10)
-    print(f"     {'OK（跨概念价值区分稳定——EMA 已收敛）' if ok_c else 'FAIL'}")
+    # review warn：StopIteration 防护（next 找不到时判 FAIL 而非崩）
+    try:
+        ca = next(c for c in cb.concepts if c.value_count > 0 and
+                  abs(c.vector[0] - obs_a[0][0]) < 0.5)
+        cb2 = next(c for c in cb.concepts if c is not ca)
+        print(f"  C: 高价值概念 {ca.value_ema:.3f} (n={ca.value_count}) "
+              f"vs 低价值概念 {cb2.value_ema:.3f} (n={cb2.value_count})")
+        ok_c = (ca.value_ema - cb2.value_ema > 0.2
+                and ca.value_count >= 10 and cb2.value_count >= 10)
+        print(f"     {'OK（跨概念价值区分稳定——EMA 已收敛）' if ok_c else 'FAIL'}")
+    except StopIteration:
+        ok_c = False
+        print("  C: FAIL（概念不足 2 个——无法跨概念比较）")
 
     ok = ok_a and ok_b and ok_c
     print(f"\n  判定: {'OK 通过（概念预测绑定成立）' if ok else 'FAIL'}")

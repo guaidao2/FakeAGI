@@ -140,8 +140,9 @@ class ConceptBank:
         if best_i >= 0 and best_d < threshold:
             return (self.concepts[best_i].name, best_d, True,
                     self.concepts[best_i].predict_value())
-            return self.concepts[best_i].name, best_d, True
-        return "", best_d, False
+        # review warn：不匹配分支必须同 4 元组契约（原 3 元组——
+        # main.py matched[3] 会 IndexError）
+        return "", best_d, False, 0.0
 
     def generate_combo(self, n: int = 3) -> list:
         """
