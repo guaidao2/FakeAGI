@@ -193,6 +193,9 @@ def main():
         np.random.seed(1000 + s)
         torch.manual_seed(1000 + s)
         full = run_episode(full_mode=True, env_seed=s)
+        # review should-fix：base 也重置 RNG——否则用 full 残流（对照不独立）
+        np.random.seed(1000 + s)
+        torch.manual_seed(1000 + s)
         base = run_episode(full_mode=False, env_seed=s)
         full_foods.append(full["food"])
         base_foods.append(base["food"])
@@ -200,6 +203,8 @@ def main():
     np.random.seed(1000 + N_SEEDS)
     torch.manual_seed(1000 + N_SEEDS)
     full = run_episode(full_mode=True, env_seed=N_SEEDS)
+    np.random.seed(1000 + N_SEEDS)
+    torch.manual_seed(1000 + N_SEEDS)
     base = run_episode(full_mode=False, env_seed=N_SEEDS)
 
     mean_f, std_f = np.mean(full_foods), np.std(full_foods)

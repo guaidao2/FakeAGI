@@ -164,7 +164,7 @@ class SuperpositionWorldModel(nn.Module):
             total_loss = total_loss + amps[i] * loss
         # A：叠加态价值预测（统一在循环外——security：避免循环内重建 optimizer）
         if dv_target is not None:
-            vdim = pred.shape[-1]
+            vdim = target.shape[-1]  # value_head 实际输入（review should-fix）
             if (self.value_head is None
                     or self.value_head.weight.shape[1] != vdim):
                 import torch.nn as nn

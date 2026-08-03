@@ -86,6 +86,7 @@ def main():
     vps = np.array([p for p, _ in paired], dtype=np.float64)
     vts = np.array([vt for _, vt in paired], dtype=np.float64)
     corr = np.corrcoef(vps, vts)[0, 1] if len(paired) > 2 else 0.0
+    corr = corr if np.isfinite(corr) else 0.0  # 方差为 0 时 NaN→0（判 FAIL）
     print(f"  A: 预测-真值相关性 r={corr:.3f} "
           f"（预测范围 {vps.min():.2f}~{vps.max():.2f}）")
     ok_a = corr > 0.3
