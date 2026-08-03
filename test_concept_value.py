@@ -41,19 +41,23 @@ class ValueAnchorCluster:
         return min(np.linalg.norm(x - c) for c in self.centroids)
 
 
-VALUE_PATTERN = np.array([0.5, -0.5, 0.5, 0, 0, 0, 0, 0])  # 价值相关特征（共享）
+VALUE_PATTERN = np.array([0.5, -0.5, 0.5, 0, 0, 0, 0, 0])  # 价值相关特征（主模式）
 
 
 def make_form(seed, n=60, dim=8):
-    """生成一种形态：正样本（V 升）= 共享价值模式 + 形态专属外观；
-    负样本（V 不升）= 纯随机（无价值模式）——生物学设定：
-    可消耗物的"价值相关特征"共享（靠近→能量升），外观各异"""
+    """生成一种形态：正样本（V 升）= 共享价值主模式 + 形态偏移
+    （前 3 维 ±0.15——各形态价值维略有不同，聚类需真聚合多形态
+    才能泛化）+ 形态专属外观；负样本 = 纯随机。
+    冻结质心（只 2 样本）覆盖不了全部价值模式 → 对照应明显更差"""
     rng = np.random.RandomState(seed)
-    appearance = rng.randn(dim) * 0.6  # 形态专属外观（各形态不同）
-    appearance[3:] = appearance[3:] * 0.3  # 外观只在非价值维度
-    appearance[:3] = 0.0                    # 价值维度由共享模式决定
-    pos = VALUE_PATTERN + appearance + rng.randn(n, dim) * 0.15
-    neg = rng.randn(n, dim) * 1.0  # 负样本：随机散点（无价值模式）
+    form_offset = rng.randn(3) * 0.15           # 形态价值偏移（小）
+    appearance = rng.randn(dim) * 0.6
+    appearance[3:] = appearance[3:] * 0.3       # 外观只在非价值维度
+    appearance[:3] = 0.0
+    base = VALUE_PATTERN.copy()
+    base[:3] = base[:3] + form_offset           # 价值维 = 主模式 + 形态偏移
+    pos = base + appearance + rng.randn(n, dim) * 0.15
+    neg = rng.randn(n, dim) * 1.0
     return pos, neg
 
 
@@ -87,7 +91,20 @@ def run():
     ok_b = d_d_pos < d_d_neg * 0.5
     print(f"     {'OK（跨形态泛化：新形态被识别为可消耗物）' if ok_b else 'FAIL'}")
 
-    ok = ok_a and ok_b
+    # C：对照（should-fix——判别力验证）——冻结质心（只前 2 个样本，
+    #    不更新）+ 全部训练正样本：若对照也全绿 → 判据无判别力
+    cl_frozen = ValueAnchorCluster()
+    for p in train_pos:
+        cl_frozen.add(p[0], True)   # 只加每个形态第 1 个样本（2 质心启动）
+        # 不再更新——冻结
+    df_pos = np.mean([cl_frozen.dist(x) for p in train_pos for x in p[::6]])
+    df_neg = np.mean([cl_frozen.dist(x) for n in train_neg for x in n[::6]])
+    print(f"  C: 冻结质心对照——正样本均距={df_pos:.3f} "
+          f"负样本均距={df_neg:.3f}")
+    ok_c = df_pos >= d_pos * 1.2  # 对照应明显差于真聚类（有判别力）
+    print(f"     {'OK（真聚类显著优于冻结对照——判别力成立）' if ok_c else 'FAIL（判据无判别力）'}")
+
+    ok = ok_a and ok_b and ok_c
     verdict = ("OK（概念层阶段 1 成立：价值锚聚类——未见过形态被识别"
                "为同类，概念=观测簇×价值绑定）" if ok else "FAIL")
     print("\n判定: " + verdict)

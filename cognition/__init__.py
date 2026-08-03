@@ -314,7 +314,10 @@ class CognitionPipeline:
                     # A 步骤：价值目标（收敛调优——ΔV 稀疏[95%≈0]导致
                     # value_head 学恒 0；改预测**价值水平 V**=归一化
                     # 身体状态——稠密平滑目标（"预测身体"哲学）
-                    v = (b.energy + b.water) / 2.0
+                    # review blocking：energy∈[0,2] water∈[0,1]——
+                    # (energy+water)/2∈[0,1.5] clamp 后健康态恒 1.0
+                    # （学恒 1 饱和伪象）；正确归一化 energy/2
+                    v = (b.energy / 2.0 + b.water) / 2.0
                     v_target = torch.tensor(
                         [float(max(0.0, min(1.0, v)))],
                         dtype=torch.float32,
