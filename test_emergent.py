@@ -128,6 +128,10 @@ def make_agi(full_mode=True):
     }
     agi = AGI()
     agi.set_cognition(CognitionPipeline(cfg))
+    # E14 消融开关（E14 组合回归 FAIL 诊断——概念驱动最可疑）：
+    # E14_CONCEPT_DRIVE=0 时禁用概念引导（隔离新模块影响）
+    if os.environ.get("E14_CONCEPT_DRIVE") == "0":
+        agi._concept_drive_enabled = False
     if full_mode:
         agi._emotion_enabled = True
         agi._other_agent_enabled = True
