@@ -40,7 +40,10 @@ FakeAGI 是一个基于自维持哲学的通用认知架构实验性实现。它
 >   （他者信任 SpeakerTrust/质疑能力/通信代价/双轴广播——协作 18
 >   vs 独行 1，18 倍——**语言社会性价值实证成立**）。
 > **回归实证**：E2 B WARN→OK、E6 113 tick（历史最快）、
-> E14 对照反超（组合调优课题）；E14 消融无拖累线（full 最优、他者贡献最大）。
+> E14 统一 seed 定论（全模块 2.0 vs 对照 1.2——伪 seed 隔离假象消解）；
+> **E14 组合回归终局诊断（15142fb）**：概念驱动在威胁环境拖累（开 1.2 vs 关 2.0）
+> → ⑧ 负价值锚（danger 概念）修复——**终局定论：小地图食物-威胁重叠
+> = 环境测量冲突非 bug（② 活着优先于获取）；E14_CONCEPT_DRIVE=0 开关保留**。
 > 详见 [`DESIGN_CONCEPTS.md`](DESIGN_CONCEPTS.md)
 > 与 [`results_assembly.md`](results_assembly.md)。
 
