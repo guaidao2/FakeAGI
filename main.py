@@ -579,7 +579,10 @@ class AGI:
                             pass
                     # review should-fix：缓存投票时说话者（反馈归因用——
                     # 多说话者/无广播 tick 时 _current_speaker 已变）
-                    self._last_lang_speaker = spk
+                    # 续审 nit：spk None 时不清空（防误清——无广播 tick
+                    # 保持上次说话者，窗口内归因仍正确）
+                    if spk is not None:
+                        self._last_lang_speaker = spk
                     # 信任归零后周期性试探（好奇心：语言可能有用，偶尔听一下）
                     if trust_eff <= 0.15 and np.random.random() < 0.02:
                         trust_eff = 0.2
