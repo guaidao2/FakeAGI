@@ -497,9 +497,13 @@ class AGI:
             # review 修复（概念驱动暴露）：未训练 GameNN 的随机 confidence
             # 也可能 >0.15 → 误抑制反射 → agent 乱走（导航失效）。
             # 加"学到位"条件：训练样本量足够才允许抑制。
-            gamenn_confidence = self.cognition.gamenn.confidence if hasattr(self.cognition, 'gamenn') else 0.0
+            gamenn_confidence = (getattr(self.cognition, 'gamenn', None) is not None
+                                 and self.cognition.gamenn.confidence) or 0.0
+            # review should-fix：update_count 属性名写错（GameNN 没有——
+            # getattr 恒 0 → gamenn_trained 恒 False → 反射抑制被永久关闭）。
+            # 正确属性：strategy_update_counts（各策略更新次数）
             gamenn_trained = (getattr(self.cognition, 'gamenn', None) is not None
-                              and getattr(self.cognition.gamenn, 'update_count', 0) > 100)
+                              and np.mean(self.cognition.gamenn.strategy_update_counts) > 100)
             suppress_reflex = gamenn_confidence > 0.15 and gamenn_trained
 
             # ─── 情绪系统：生理+认知→情绪向量→探索率调制（默认关闭，零影响）───
@@ -810,7 +814,9 @@ class AGI:
                 # 已远离食物——互斥永不触发！<1.5="还能吃"→
                 # 周期性采集行为：满 2.0 离开，降到 1.5 回来停吃）
                 if matched[2] and self.body.energy < 1.5:
-                    self._concept_stay = getattr(self, '_concept_stay', 0) + 1
+                    # nit：封顶——匹配持续满足时计数器不再无界增长
+                    self._concept_stay = min(getattr(self, '_concept_stay', 0) + 1,
+                                             getattr(self, '_concept_stay_max', 5) + 1)
                     if self._concept_stay <= getattr(self, '_concept_stay_max', 5):
                         action = 0  # 停留尝试交互（吃到则 V 上升）
                 else:

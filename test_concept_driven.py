@@ -92,7 +92,8 @@ def run(concept_driven, seed=0, ticks=1200):
     n_concepts = len(agi.concept_bank.concepts)
     return {"food": foods, "stay": stay_near_food,
             "concepts": n_concepts, "alive": agi.alive, "tick": agi.tick,
-            "died_at": died_at}
+            "died_at": died_at,
+            "concept_kinds": [c.kind for c in agi.concept_bank.concepts]}
 
 
 def main():
@@ -116,7 +117,10 @@ def main():
     ok_b = es > cs + 1.0
     print(f"  B: {'OK（引导真实生效——停留更多）' if ok_b else 'FAIL'}")
 
-    nc = np.mean([r["concepts"] for r in exp])
+    # nit：C 判据统计 consumable 簇（extract_from_obs 每 tick 加
+    # act_ 概念——len(concepts) 含非 consumable，验证不了概念簇形成）
+    nc = np.mean([sum(1 for c in r.get("concept_kinds", [])
+                      if c == "consumable") for r in exp])
     print(f"  概念簇数量: {nc:.0f}（引导前提）")
     ok_c = nc >= 1
     print(f"  C: {'OK（概念簇形成）' if ok_c else 'FAIL'}")
