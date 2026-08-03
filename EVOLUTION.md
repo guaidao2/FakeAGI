@@ -28,7 +28,7 @@
 > - ✅ **value_head 输入信号改进（下阶段）**：pred→target（当前 hidden）——学恒均值问题解决：预测-真值 r=0.422 + 高低区分 1.010 vs 0.710 + 行为不退化（test_value_converge A/B/C 全 OK）；A 判据 mse→相关性（学区分期 mse 上升≠坏，均值拟合 mse 小≠好）
 > - ✅ **概念层接主循环（abffea4）**：价值锚聚类→concept_bank→主循环——正回报（_food_recently_tick，energy_delta 是代谢默认值——初版恒 False 修复）观测进"可消耗物"簇；验证 consumable freq=99（600 tick）概念从身体经验长出
 > - ✅ **①+② 概念预测绑定+预测驱动引导（8fa4bc0+6fe4f8f+aba7235）**：Concept 价值 EMA（add_value_anchored 记录 V）+ match_concept 返回预测值 + 引导条件=匹配+预测V>0.55——**① 首次正收益：n=10 食物 20.7→23.0（+11%，原中性 20.7 vs 20.8 持平）——概念层第一个真正有用的闭环（"像+值高"才停）**；② test_concept_binding 判定 OK（高价值预测 0.842 vs 低价值 0.328——概念学到价值区分；跨概念判据替代组内相关——概念预测是概念级恒定值）；审查修复：match_concept 4 元组契约统一（不匹配分支原 3 元组——matched[3] IndexError 隐患）+ update_value None 防护下沉 API
-> - ✅ **③ hidden 漂移诊断（52c3874+480fc98）**：确认 4.74x/500tick 漂移（LNN 范数 22→105）；**RMS 归一化修复三版（scale 1.0/20/目标范数 22）均消除漂移（→1.00x）但破坏 LNN 递归动力学（E13 26-30→2/30 成功崩溃）——回退，漂移是 LNN 状态增益自适应特性非缺陷**；test_hidden_drift.py 保留为观测工具
+> - ✅ **③ 概念符号化（44e6268+4e5bd9a+a5d7f89）**：Concept.symbols + bind_symbol/activate_by_symbol + main.py 共现绑定（Hebbian——概念激活时 language_tokens 绑定）+ 符号激活引导（词命中→等同匹配→引导行为）——**test_concept_symbol 判定 OK：A 绑定学习（food→consumable_0）+ B 词→概念（v=0.842「所指」）+ C 区分（water 不激活）+ D 符号-价值一致——语言从"听词→动作反射"升级为"听词→激活概念→预测价值→动作"，语言接地的第一步**；审查修复：符号路径接入语言信任闭环（_symbol_activated_tick 死字段→统一 _language_used_tick）+ None 防护对称化（bind_symbol/activate_by_symbol/bind_symbols）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
