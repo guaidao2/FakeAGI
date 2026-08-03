@@ -36,7 +36,11 @@ class Concept:
         return self.value_ema
 
     def update_value(self, v: float):
-        """记录该概念出现时的 V 值（在线 EMA，α=0.2）"""
+        """记录该概念出现时的 V 值（在线 EMA，α=0.2）
+        security LOW 修复：None 防护下沉 API（原仅调用侧防护——
+        float(None) 会 TypeError）"""
+        if v is None:
+            return
         self.value_count += 1
         self.value_history.append(v)
         self.value_ema = 0.8 * self.value_ema + 0.2 * float(v)
