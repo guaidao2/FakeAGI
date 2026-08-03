@@ -156,7 +156,7 @@
 | 单速率梯度更新 | 慢副本（EMA）+ 稳态门控学习率——**✅ B3 已接线（241b940 + 90e7c30，test_wm_slow.py A/B/C/D 全过：EMA 追踪/门控冻结 0.000000/生长重注册/cuda 惰性重注册；review blocking 修复：set_cognition 挂 agi 引用（门控原恒 1.0 死代码）+ EMA 设备惰性重注册）** | meta-RL / Hubel |
 | AttentionGate（特征加权）| 移动效用加 epistemic 项——**🔄 B4 部分接线**（空间记忆引导 get_exploration_target 已实现——探索目标去未访问/高惊奇区域；learning progress 已接好奇心——"去最值得采样处"的方向性已具备；完整"移动效用=稳态+β·信息增益"待做） | active inference |
 | hemin 影子自我（自我对比）| 演示缓冲 + BC + copy-when-uncertain——**⏳ B5 待 teacher 环境**（需多智能体/示范者提供（观测→动作）序列；主循环他者默认关，test_social 有雏形） | Laland / Meltzoff |
-| 简单全可观察环境 | POMDP 化 + 组合任务 | SCAN / Kaelbling |
+| 简单全可观察环境 | POMDP 化 + 组合任务——**✅ B 最小版已接线（4f99e3f，test_pomdp_env.py：隐藏状态开关解锁——t=1050 学会踩开关+吃食物，隐状态维持成功；概念层压力源建立）** | SCAN / Kaelbling |
 
 **排序修正**：环境复杂度审计（7.1）是概念层的前置条件——若环境
 不需要概念就能解，概念层不会涌现（苍蝇在只有水的盒子里不会进化导航）。
