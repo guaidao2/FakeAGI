@@ -226,6 +226,19 @@ class CognitionPipeline:
         # LNN 时序更新 → 新 hidden
         lnn_out, self.hidden, tau = self.lnn(x, self.hidden)
 
+        # ③ hidden 稳态化（hidden 漂移修复——诊断 4.74x/500tick）：
+        # LNN 状态范数爆炸 → 世界模型输入分布漂移 → world_loss 涨。
+        # RMS 归一化保持方向信息、控制尺度（生物稳态可塑性类比——
+        # 神经元放电率自稳）。只归一化范数，不动相位/方向。
+        if self.hidden is not None:
+            try:
+                rms = torch.sqrt((self.hidden ** 2).mean())
+                if float(rms) > 1e-6:
+                    self.hidden = self.hidden / rms * float(
+                        getattr(self, '_hidden_scale', 1.0))
+            except Exception:
+                pass
+
         # 世界模型：用 prev_hidden 预测当前 hidden（从过去预测现在）
         surprise = 0.0
         error_path = "perception"
