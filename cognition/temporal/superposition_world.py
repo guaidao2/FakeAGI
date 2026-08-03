@@ -172,7 +172,9 @@ class SuperpositionWorldModel(nn.Module):
                 # 维度变化 → 重建 optimizer（含 value_head 参数）
                 self.optimizer = torch.optim.AdamW(
                     self.parameters(), lr=0.001)
-            dv_preds = self.value_head(pred.detach())
+            dv_preds = self.value_head(target.detach())
+            # value_head 输入 pred→target 改进（学恒均值修复）：
+            # 当前状态→当前 V 水平，语义对齐且输入稳定
             dv_t = dv_target.detach()
             # security：numel 校验（reshape 隐式匹配 batch>1 会崩）
             if dv_t.numel() == dv_preds.numel() and dv_t.shape != dv_preds.shape:

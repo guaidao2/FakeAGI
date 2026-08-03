@@ -184,14 +184,21 @@ def main():
     print("=" * 60)
 
     # 多 seeds 统计（E 判定需要：单次无法区分显著与 noise）
+    # 统一 seed 基建（E14 矛盾修复）：每个 episode 重置全局 RNG——
+    # 否则 seeds 1-5 实为同一 RNG 流连续分段（AGI 内部 epsilon/探索/
+    # goal_gen 等裸 np.random 全受影响）——真 seed 隔离
     N_SEEDS = 5
     full_foods, base_foods = [], []
     for s in range(N_SEEDS):
+        np.random.seed(1000 + s)
+        torch.manual_seed(1000 + s)
         full = run_episode(full_mode=True, env_seed=s)
         base = run_episode(full_mode=False, env_seed=s)
         full_foods.append(full["food"])
         base_foods.append(base["food"])
     # 末次详情用于 A-D 判定
+    np.random.seed(1000 + N_SEEDS)
+    torch.manual_seed(1000 + N_SEEDS)
     full = run_episode(full_mode=True, env_seed=N_SEEDS)
     base = run_episode(full_mode=False, env_seed=N_SEEDS)
 

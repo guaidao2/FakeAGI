@@ -66,6 +66,11 @@ def main():
     for name, lang, emo, other in groups:
         seeds = []
         for es in [1, 2, 3]:
+            # 统一 seed 基建：每个 config×env_seed 重置全局 RNG
+            # （否则 AGI 内部随机为同一 RNG 流连续分段——伪 seed 隔离）
+            import torch
+            np.random.seed(1000 + es)
+            torch.manual_seed(1000 + es)
             seeds.append(run_episode(lang, emo, other, env_seed=es))
         m, s = np.mean(seeds), np.std(seeds)
         results[name] = (m, s, seeds)

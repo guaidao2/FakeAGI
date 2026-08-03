@@ -101,7 +101,11 @@ class WorldModel(nn.Module):
         loss = self.loss_fn(pred, target.detach())
         # A 步骤：价值头监督（ΔV 预测——真实身体读数，有内容）
         if dv_target is not None:
-            dv_pred = self.value_head(pred.detach())  # 从预测状态预测价值
+            # value_head 输入 pred→target 改进（学恒均值修复）：
+            # pred 是预测的下一状态（预测噪声+时序错位——配当前 V 目标
+            # 语义不合）；target=当前 hidden（真实观测编码）——
+            # 当前状态→当前 V 水平，语义对齐且输入稳定
+            dv_pred = self.value_head(target.detach())
             dv_t = dv_target.detach()
             # security：numel 校验（reshape 隐式匹配 batch>1 会崩）
             if dv_t.numel() == dv_pred.numel() and dv_t.shape != dv_pred.shape:

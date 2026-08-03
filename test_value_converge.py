@@ -42,8 +42,10 @@ def main():
             dx, dy = dxs[a % 5]
             self.pos[0] = max(0, min(9, self.pos[0] + dx))
             self.pos[1] = max(0, min(9, self.pos[1] + dy))
-            # 前 400 tick 无食物（饥饿期——制造 v_true 低值分布）
-            food_active = self.tick >= 400
+            # 前 200 tick 无食物（饥饿期——制造 v_true 低值分布；
+            # 400 tick 过狠致 agent 濒死行为退化——C 判据独立于
+            # value_head（价值只喂学习不驱动动作））
+            food_active = self.tick >= 200
             eat = (food_active
                    and abs(self.pos[0]-self.food_pos[0])+abs(self.pos[1]-self.food_pos[1]) < 2)
             drink = abs(self.pos[0]-self.water_pos[0])+abs(self.pos[1]-self.water_pos[1]) < 2
@@ -64,7 +66,10 @@ def main():
         if prev_h is not None and hasattr(wm, 'value_head') and wm.value_head is not None:
             with torch.no_grad():
                 pred = wm.predict(prev_h.detach(), prev_a)
-                vp = wm.value_head(pred.detach())
+                # 采集口径与训练一致（target=当前 hidden）——
+                # 否则 pred 输入 vs target 训练错位（A 判据失真）
+                cur_h = agi.cognition.hidden.detach()
+                vp = wm.value_head(cur_h)
                 v_true = (agi.body.energy/2.0 + agi.body.water)/2.0
                 vmse = float(F.mse_loss(vp.squeeze(-1),
                                         torch.tensor([v_true]).to(vp.device)))
@@ -76,14 +81,18 @@ def main():
     if len(vmse_hist) < 50:
         print("  FAIL: value_head 未激活")
         return 1
-    # A：value_mse 前后对比
+    # A：预测-真值相关性（mse 判据失效——学区分会增加 mse 而均值拟合
+    # mse 小≠好；相关性才是"学到状态-价值映射"的直接度量）
+    vps = np.array([p for p, _ in paired], dtype=np.float64)
+    vts = np.array([vt for _, vt in paired], dtype=np.float64)
+    corr = np.corrcoef(vps, vts)[0, 1] if len(paired) > 2 else 0.0
+    print(f"  A: 预测-真值相关性 r={corr:.3f} "
+          f"（预测范围 {vps.min():.2f}~{vps.max():.2f}）")
+    ok_a = corr > 0.3
+    print(f"     {'OK（value_head 学到状态-价值映射——正相关）' if ok_a else 'FAIL'}")
     half = len(vmse_hist) // 2
-    early_v = np.mean(vmse_hist[:half])
-    late_v = np.mean(vmse_hist[half:])
-    print(f"  A: value_mse early={early_v:.4f} late={late_v:.4f} "
-          f"({early_v/max(late_v,1e-9):.2f}x)")
-    ok_a = late_v < early_v * 0.7
-    print(f"     {'OK（value_head 真收敛——非饱和伪象）' if ok_a else 'FAIL'}")
+    print(f"     （参考 mse: early={np.mean(vmse_hist[:half]):.4f} "
+          f"late={np.mean(vmse_hist[half:]):.4f}——学区分期 mse 可上升，不作判据）")
     # B：输出区分度（should-fix：随机 hidden 判据无判别力——
     # 改真实轨迹上 v_true 高低分组对比（分位数——water 恒满会拖底
     # 绝对阈值，相对分组更稳））
