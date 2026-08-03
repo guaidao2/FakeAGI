@@ -30,7 +30,9 @@ FakeAGI 是一个基于自维持哲学的通用认知架构实验性实现。它
 > + A 价值信号（世界模型预测身体价值）+ B POMDP 环境 + 概念层阶段 1
 > （价值锚聚类）+ **概念层接主循环**（consumable 簇从身体经验长出）
 > + **概念驱动行为**（match_concept→引导停留——n=10 定论：通路接通、
->   中性净效果）。**回归实证**：E2 B WARN→OK、E6 113 tick（历史最快）、
+>   中性净效果）+ **概念预测绑定**（价值 EMA→预测驱动引导——首次
+>   正收益：食物 20.7→23.0 +11%，概念层第一个有用闭环）。
+> **回归实证**：E2 B WARN→OK、E6 113 tick（历史最快）、
 > E14 对照反超（组合调优课题）；E14 消融无拖累线（full 最优、他者贡献最大）。
 > 详见 [`DESIGN_CONCEPTS.md`](DESIGN_CONCEPTS.md)
 > 与 [`results_assembly.md`](results_assembly.md)。
