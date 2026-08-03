@@ -100,7 +100,7 @@ def main():
     print("=" * 56)
     print("概念驱动行为验证（概念→行为引导）")
     print("=" * 56)
-    seeds = [0, 1, 2, 3, 4]
+    seeds = list(range(10))
     ctrl = [run(False, s) for s in seeds]
     exp = [run(True, s) for s in seeds]
 

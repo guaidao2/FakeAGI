@@ -817,8 +817,20 @@ class AGI:
                     # nit：封顶——匹配持续满足时计数器不再无界增长
                     self._concept_stay = min(getattr(self, '_concept_stay', 0) + 1,
                                              getattr(self, '_concept_stay_max', 5) + 1)
-                    if self._concept_stay <= getattr(self, '_concept_stay_max', 5):
-                        action = 0  # 停留尝试交互（吃到则 V 上升）
+                    # 动态放弃（停留成本优化——D 边缘 FAIL 的误停成本）：
+                    # 停留 ≥2 tick 且 energy 无上升（没吃到——可能认错
+                    # 了相似但不可吃的观测）→ 立即放弃恢复自主。
+                    stay_start_e = getattr(self, '_concept_stay_start_e',
+                                           self.body.energy)
+                    if (self._concept_stay >= 2
+                            and self.body.energy <= stay_start_e + 0.005):
+                        self._concept_stay = 0  # 放弃（探索损失最小）
+                        self._concept_stay_start_e = None
+                    else:
+                        if self._concept_stay == 1:
+                            self._concept_stay_start_e = self.body.energy
+                        if self._concept_stay <= getattr(self, '_concept_stay_max', 5):
+                            action = 0  # 停留尝试交互（吃到则 V 上升）
                 else:
                     self._concept_stay = 0
             except Exception:
