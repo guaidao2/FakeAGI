@@ -862,6 +862,13 @@ class AGI:
         # ─── 10c. 概念提取 + 组合式反事实生成 ───
         try:
             self.concept_bank.extract_from_obs(obs, action, {"energy_delta": energy_delta})
+            # 概念层接入（DESIGN_CONCEPTS §3 阶段 1）：价值锚聚类——
+            # 正回报（V 上升）时观测进入"可消耗物"簇（概念=观测簇×价值绑定）
+            # 注意：energy_delta 是默认代谢值——正回报用 _food_recently_tick
+            v_up = (self.tick - getattr(self, '_food_recently_tick', -1000)) < 3
+            if v_up:
+                self.concept_bank.add_value_anchored(
+                    np.asarray(obs, dtype=np.float32), True)
             # 每 300 tick 生成一次组合式反事实（记录为内部"假设场景"）
             if self.tick % 300 == 0:
                 combo = self.concept_bank.generate_combo(n=3)

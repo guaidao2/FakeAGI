@@ -66,6 +66,34 @@ class ConceptBank:
                 return
         if len(self.concepts) < self.max_concepts:
             self.concepts.append(concept)
+
+    # ─── 概念层接入（DESIGN_CONCEPTS §3 阶段 1：价值锚聚类）───
+    def add_value_anchored(self, obs: np.ndarray, v_up: bool) -> str:
+        """价值锚聚类：V 上升事件更新"可消耗物"概念簇。
+        概念 = 观测簇 × 价值绑定——只有 V 上升的观测进簇。
+        返回概念名（"consumable_N"）或空串。
+        验证见 test_concept_value.py（跨形态泛化成立）。"""
+        if not v_up or obs is None or len(obs) == 0:
+            return ""
+        vec = np.asarray(obs, dtype=np.float32).flatten()
+        # 找/建"consumable"簇（价值锚聚类质心）
+        best_i, best_d = -1, 1e9
+        for i, c in enumerate(self.concepts):
+            if c.kind == "consumable":
+                d = float(np.linalg.norm(c.vector - vec))
+                if d < best_d:
+                    best_i, best_d = i, d
+        if best_i >= 0 and best_d < 1.5:
+            # 更新质心（在线 k-means）+ 增强频率
+            self.concepts[best_i].vector = (0.9 * self.concepts[best_i].vector
+                                            + 0.1 * vec)
+            self.concepts[best_i].freq += 1
+            return self.concepts[best_i].name
+        if len(self.concepts) < self.max_concepts:
+            name = f"consumable_{len(self.concepts)}"
+            self.concepts.append(Concept(name, "consumable", vec.copy()))
+            return name
+        return ""
     
     def generate_combo(self, n: int = 3) -> list:
         """
