@@ -24,6 +24,8 @@
 > - ✅ **概念层阶段 1（b5cf7be+41fe394+1a96f3c）**：价值锚聚类（`test_concept_value.py`）——概念=观测簇×价值绑定：聚类有效（0.47 vs 2.74）+ 跨形态泛化（新形态正 0.57 vs 负 2.58）；**review should-fix：初版 A/B 无判别力（价值维完全重合致冻结对照也全绿）——修正形态价值偏移后判别力成立（真聚类 0.465 vs 冻结对照 0.595）**；发现：纯外观聚类 FAIL→价值模式共享才泛化
 > - ✅ **收敛重验（968f41a+a538327）**：归一化修复后 value_head——**A：value_mse 37x 下降（0.27→0.007 真收敛）+ B FAIL 暴露真问题：学恒均值（高价值态预测 0.427 vs 低价值态 0.521 方向反——收敛≠学对，判别力判据抓到伪象）**；诚实负结果——value_head 输入信号需改进（pred.detach() 受 hidden 漂移影响），下阶段课题
 > - ✅ **E14 消融（3eb413c）**：seeds 1-3 下 full 3.0 最优——**无单线拖累**（语言 1.7/情绪 0.7/他者 0.0 关闭均<full；他者贡献最大）、base 1.0<full；与 E14 原始（seeds 1-5）base 反超**方向矛盾——seed 敏感性**（无固定全局 seed），需统一 seed 对比定论
+> - ✅ **统一 seed 基建 + E14 定论（下阶段）**：原 seeds 1-5 实为**同一 RNG 流连续分段**（main() 固定 seed(42) 但 run_episode 循环内不重置——AGI 内部 epsilon/探索/goal_gen 裸 np.random 全受影响）——"base 反超"是伪 seed 隔离**假象**！统一 seed（每 episode np.random.seed(1000+s)+torch.manual_seed(1000+s)）后重跑：**全模块 2.0±2.1 vs 对照 1.2±1.2——全模块占优，方向反转**；睡眠 0→202 次（伪象修正）——E14 矛盾消解
+> - ✅ **value_head 输入信号改进（下阶段）**：pred→target（当前 hidden）——学恒均值问题解决：预测-真值 r=0.422 + 高低区分 1.010 vs 0.710 + 行为不退化（test_value_converge A/B/C 全 OK）；A 判据 mse→相关性（学区分期 mse 上升≠坏，均值拟合 mse 小≠好）
 > - ✅ **概念层接主循环（abffea4）**：价值锚聚类→concept_bank→主循环——正回报（_food_recently_tick，energy_delta 是代谢默认值——初版恒 False 修复）观测进"可消耗物"簇；验证 consumable freq=99（600 tick）概念从身体经验长出
 > 本文档描述下一代 FakeAGI 的进化能力。
 
