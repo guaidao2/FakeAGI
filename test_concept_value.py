@@ -91,12 +91,10 @@ def run():
     ok_b = d_d_pos < d_d_neg * 0.5
     print(f"     {'OK（跨形态泛化：新形态被识别为可消耗物）' if ok_b else 'FAIL'}")
 
-    # C：对照（should-fix——判别力验证）——冻结质心（只前 2 个样本，
-    #    不更新）+ 全部训练正样本：若对照也全绿 → 判据无判别力
+    # C：对照（should-fix——判别力验证）——冻结质心（显式固定 2 个
+    #    质心，不走 add——add 在 <2 时 append 但第 3 次会 10% 污染）
     cl_frozen = ValueAnchorCluster()
-    for p in train_pos:
-        cl_frozen.add(p[0], True)   # 只加每个形态第 1 个样本（2 质心启动）
-        # 不再更新——冻结
+    cl_frozen.centroids = [train_pos[0][0].copy(), train_pos[1][0].copy()]
     df_pos = np.mean([cl_frozen.dist(x) for p in train_pos for x in p[::6]])
     df_neg = np.mean([cl_frozen.dist(x) for n in train_neg for x in n[::6]])
     print(f"  C: 冻结质心对照——正样本均距={df_pos:.3f} "
