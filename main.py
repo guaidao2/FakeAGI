@@ -806,9 +806,8 @@ class AGI:
         elif (not self.body.is_sleeping
                 and getattr(self, '_concept_drive_enabled', True)):
             try:
-                # 匹配阈值 0.35（review warn 根因：0.8 观测空间≈5 格，
-                # 与吃判定 <3 格口径错位——5 格外就停→探索损失→D 不利。
-                # 0.35≈3 格内才匹配——与吃判定对齐）
+                # 匹配阈值 0.35（终审 nit 修正：原注释"5 格"过时——
+                # 0.35 观测空间≈3 格内，与吃判定 <3 格口径对齐）
                 matched = self.concept_bank.match_concept(obs, threshold=0.35)
                 # 触发条件 energy<1.5（非极饿 0.5——设计缺陷修复：
                 # 在食物旁时 energy 通常高（刚吃过），饿到 <0.5 时

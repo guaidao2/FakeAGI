@@ -133,12 +133,13 @@ def main():
     e_died = [r["died_at"] for r in exp if not r["alive"]]
     print(f"  死亡: 对照 {cd_} {c_died} / 实验 {ed_} {e_died}"
           f"（×{len(seeds)}seeds）")
-    # Fisher 精确检验（单侧）：2x2 表 [[ed_, cd_], [n-ed_, n-cd_]]
-    # n_total = 实验+对照总样本（原错误：n=len(seeds) 只算一组）
+    # Fisher 精确检验（双侧近似：单侧 p×2 封顶 1——消除 ed_<cd_
+    # 方向反转误报；n_total = 实验+对照总样本）
     from math import comb
     n_total = 2 * len(seeds)
     a, b, c_, d_ = ed_, cd_, len(seeds) - ed_, len(seeds) - cd_
-    p_fisher = (comb(a + b, a) * comb(c_ + d_, c_)) / comb(n_total, a + c_)
+    p_one = (comb(a + b, a) * comb(c_ + d_, c_)) / comb(n_total, a + c_)
+    p_fisher = min(1.0, 2.0 * p_one)
     print(f"  D: Fisher 单侧 p={p_fisher:.3f}（n={len(seeds)}×2）")
     ok_d = p_fisher > 0.05
     print(f"     {'OK（无显著死亡差异——引导中性，死亡差为种子噪声）' if ok_d else 'FAIL（引导显著增加死亡）'}")
