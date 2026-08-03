@@ -194,7 +194,32 @@ class ConceptBank:
                 return c.name, c.predict_value(), True
         return "", 0.0, False
 
-    # ─── ① 阶段 4：概念组合（概念图——抽象层）───
+    # ─── 语言生成（①——概念→词：看到概念→说出绑定符号）───
+    def speak(self, obs: np.ndarray, kind: str = "consumable",
+              threshold: float = 1.5):
+        """说：当前观测匹配概念 → 输出绑定符号（词）。
+        返回 (word, concept_name, spoke)——spoke=True 表示
+        "有可说"（概念有绑定词）；无匹配/无绑定词 → 沉默。
+        语言生成方向：概念激活→符号输出（与 activate_by_symbol 反向）。"""
+        _, _, matched, _ = self.match_concept(obs, kind=kind,
+                                              threshold=threshold)
+        if not matched:
+            return "", "", False
+        # 找匹配概念（复用 match 逻辑拿概念对象）
+        vec = np.asarray(obs, dtype=np.float32).flatten()
+        dim = vec.shape[0]
+        best_i, best_d = -1, 1e9
+        for i, c in enumerate(self.concepts):
+            if c.kind == kind and c.vector.shape[0] == dim:
+                d = float(np.linalg.norm(c.vector - vec))
+                if d < best_d:
+                    best_i, best_d = i, d
+        if best_i >= 0 and best_d < threshold:
+            c = self.concepts[best_i]
+            if c.symbols:
+                return c.symbols[0], c.name, True
+        return "", "", False
+
     def add_abstract_group(self, name: str, kinds: list):
         """注册抽象组：抽象名 → 子概念类型组（如
         "consumable" → ["consumable"]——食物/水源共享"可消耗物"
