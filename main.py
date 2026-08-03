@@ -817,7 +817,11 @@ class AGI:
                         cname, vpred, found = self.concept_bank.activate_by_symbol(w)
                         if found:
                             matched = (cname, 0.0, True, vpred)
-                            self._symbol_activated_tick = self.tick
+                            # review should-fix：符号路径接入语言信任闭环
+                            # （原 _symbol_activated_tick 死字段——信任
+                            # 强化只认 _language_used_tick：听词（含符号）
+                            # →找到食物→trust+0.1 统一）
+                            self._language_used_tick = self.tick
                             break
                 # 触发条件 energy<1.5（非极饿 0.5——设计缺陷修复：
                 # 在食物旁时 energy 通常高（刚吃过），饿到 <0.5 时

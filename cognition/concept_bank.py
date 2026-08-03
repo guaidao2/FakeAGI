@@ -52,7 +52,10 @@ class Concept:
     # ─── 阶段 3：符号化（词↔概念绑定——"语言是符号压缩"落地）───
     def bind_symbol(self, symbol: str):
         """绑定一个语言符号（词）到本概念——共现学习（Hebbian）：
-        概念激活时同时出现的词 → 绑定。重复绑定幂等。"""
+        概念激活时同时出现的词 → 绑定。重复绑定幂等。
+        review nit：None 显式防护（str(None) 会绑定 "None" 字符串）"""
+        if symbol is None:
+            return
         s = str(symbol).strip().lower()
         if s and s not in self.symbols:
             self.symbols.append(s)

@@ -40,8 +40,8 @@ def main():
 
     print(f"  概念: {[c.name for c in cb.concepts]}")
 
-    # A：绑定学习
-    c = cb.concepts[0]
+    # A：绑定学习（review nit：用绑定目标 last_name 而非 concepts[0]）
+    c = next(c for c in cb.concepts if c.name == last_name)
     print(f"  A: 概念 {c.name} 符号 = {c.symbols}")
     ok_a = "food" in c.symbols
     print(f"     {'OK（共现绑定生效——概念学到词）' if ok_a else 'FAIL'}")
