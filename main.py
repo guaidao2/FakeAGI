@@ -857,18 +857,23 @@ class AGI:
                         and self.body.energy < 1.5):
                     # ① 预测驱动：不只"像"可消耗物——概念价值预测
                     # （出现时 V 的 EMA）>0.55 才停（"像 + 值高"）
-                    # nit：封顶——匹配持续满足时计数器不再无界增长
-                    self._concept_stay = min(getattr(self, '_concept_stay', 0) + 1,
-                                             getattr(self, '_concept_stay_max', 5) + 1)
-                    # 动态放弃（停留成本优化——D 边缘 FAIL 的误停成本）：
-                    # 停留 ≥2 tick 且 energy 无上升（没吃到——可能认错
-                    # 了相似但不可吃的观测）→ 立即放弃恢复自主。
-                    stay_start_e = getattr(self, '_concept_stay_start_e',
-                                           self.body.energy)
-                    if (self._concept_stay >= 2
-                            and self.body.energy <= stay_start_e + 0.005):
-                        self._concept_stay = 0  # 放弃（探索损失最小）
-                        self._concept_stay_start_e = None
+                    # ⑧ 威胁检查（对称压缩）：匹配 danger 概念 → 不停
+                    # （"什么会死"与"什么能活"同等重要——停留前确认安全）
+                    _, _, danger_matched, _ = self.concept_bank.match_concept(
+                        obs, kind="danger", threshold=0.35)
+                    if not danger_matched:
+                        # nit：封顶——匹配持续满足时计数器不再无界增长
+                        self._concept_stay = min(getattr(self, '_concept_stay', 0) + 1,
+                                                 getattr(self, '_concept_stay_max', 5) + 1)
+                        # 动态放弃（停留成本优化——D 边缘 FAIL 的误停成本）：
+                        # 停留 ≥2 tick 且 energy 无上升（没吃到——可能认错
+                        # 了相似但不可吃的观测）→ 立即放弃恢复自主。
+                        stay_start_e = getattr(self, '_concept_stay_start_e',
+                                               self.body.energy)
+                        if (self._concept_stay >= 2
+                                and self.body.energy <= stay_start_e + 0.005):
+                            self._concept_stay = 0  # 放弃（探索损失最小）
+                            self._concept_stay_start_e = None
                     else:
                         if self._concept_stay == 1:
                             self._concept_stay_start_e = self.body.energy
@@ -997,6 +1002,18 @@ class AGI:
                 v_now = (self.body.energy / 2.0 + self.body.water) / 2.0
                 cname = self.concept_bank.add_value_anchored(
                     np.asarray(obs, dtype=np.float32), True, v=v_now)
+                # ⑧ 负价值锚（对称压缩）：伤害事件（能量大幅下降/健康受损）
+                # → 观测进入 "danger" 簇（"什么会死"与"什么能活"同等重要）
+                v_down = (env_energy < -0.05
+                          or (self.body.health
+                              < getattr(self, '_last_health', 1.0) - 0.02))
+                if v_down:
+                    try:
+                        self.concept_bank.add_danger_anchored(
+                            np.asarray(obs, dtype=np.float32), True)
+                    except Exception:
+                        pass
+                self._last_health = self.body.health
                 # ③ 符号化：概念激活时同时出现的语言 token → 共现绑定
                 # （Hebbian——"食物概念 ↔ 'food' 词"从经验长出）
                 # review 修复：窗口化（原"吃食 tick==广播 tick"概率

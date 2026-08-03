@@ -142,6 +142,32 @@ class ConceptBank:
             self.concepts.append(c)
             return name
         return ""
+
+    # ─── 负价值锚（⑧ 对称压缩——"什么会死"与"什么能活"同等重要）───
+    def add_danger_anchored(self, obs: np.ndarray, v_down: bool) -> str:
+        """负价值锚聚类：伤害/V 下降事件更新 "danger" 概念簇。
+        与 add_value_anchored 对称（V 上升→consumable / V 下降→danger）。
+        验证见 test_concept_danger.py（危险观测→danger 概念+区分）。"""
+        if not v_down or obs is None or len(obs) == 0:
+            return ""
+        vec = np.asarray(obs, dtype=np.float32).flatten()
+        dim = vec.shape[0]
+        best_i, best_d = -1, 1e9
+        for i, c in enumerate(self.concepts):
+            if c.kind == "danger" and c.vector.shape[0] == dim:
+                d = float(np.linalg.norm(c.vector - vec))
+                if d < best_d:
+                    best_i, best_d = i, d
+        if best_i >= 0 and best_d < 1.5:
+            self.concepts[best_i].vector = (0.9 * self.concepts[best_i].vector
+                                            + 0.1 * vec)
+            self.concepts[best_i].freq += 1
+            return self.concepts[best_i].name
+        if len(self.concepts) < self.max_concepts:
+            name = f"danger_{len(self.concepts)}"
+            self.concepts.append(Concept(name, "danger", vec.copy()))
+            return name
+        return ""
     
     # ─── 概念驱动行为（DESIGN_CONCEPTS §3 阶段 2 前置：概念→行为）───
     def match_concept(self, obs: np.ndarray, kind: str = "consumable",
