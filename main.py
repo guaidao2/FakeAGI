@@ -864,8 +864,9 @@ class AGI:
             self.concept_bank.extract_from_obs(obs, action, {"energy_delta": energy_delta})
             # 概念层接入（DESIGN_CONCEPTS §3 阶段 1）：价值锚聚类——
             # 正回报（V 上升）时观测进入"可消耗物"簇（概念=观测簇×价值绑定）
-            # 注意：energy_delta 是默认代谢值——正回报用 _food_recently_tick
-            v_up = (self.tick - getattr(self, '_food_recently_tick', -1000)) < 3
+            # should-fix：只在吃食**当 tick** 聚类（_food_recently_tick 是
+            # 吃食时刻——<3 会污染后续移动后观测；energy_delta 是代谢默认值）
+            v_up = (self.tick == getattr(self, '_food_recently_tick', -1000))
             if v_up:
                 self.concept_bank.add_value_anchored(
                     np.asarray(obs, dtype=np.float32), True)

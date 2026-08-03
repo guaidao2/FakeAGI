@@ -76,10 +76,13 @@ class ConceptBank:
         if not v_up or obs is None or len(obs) == 0:
             return ""
         vec = np.asarray(obs, dtype=np.float32).flatten()
-        # 找/建"consumable"簇（价值锚聚类质心）
+        # should-fix：维度防护——质心与 obs 维度不匹配时跳过
+        # （P4 观测增长机制会让 obs 维度变化——否则 ValueError 被吞
+        #  且概念层静默失效每 tick 刷 WARN）
+        dim = vec.shape[0]
         best_i, best_d = -1, 1e9
         for i, c in enumerate(self.concepts):
-            if c.kind == "consumable":
+            if c.kind == "consumable" and c.vector.shape[0] == dim:
                 d = float(np.linalg.norm(c.vector - vec))
                 if d < best_d:
                     best_i, best_d = i, d
