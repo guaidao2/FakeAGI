@@ -555,6 +555,12 @@ class AGI:
             if self.committee is not None:
                 # 0. 语言指令投票（方向词→动作先验，可信度驱动——可学习）
                 lang_v = None
+                # 缓存最近广播（共现绑定窗口化——review 修复：
+                # 吃食 tick 未必是广播 tick）
+                if getattr(self.cognition, 'language_tokens', None):
+                    self._last_lang_broadcast_tick = self.tick
+                    self._last_lang_tokens = list(
+                        self.cognition.language_tokens)
                 if (hasattr(self.cognition, 'language')
                         and self.cognition.language is not None
                         and self.cognition.language_tokens):
@@ -869,11 +875,17 @@ class AGI:
                         self.override_action = -1
                         self._food_recently_tick = self.tick
                         # P8a: 听词后找到食物 → 语言可信度强化（学习信号）
-                        if self._language_used_tick == self.tick:
+                        # review 修复：同 tick 太严（符号激活 30tick 一次
+                        # 广播——吃到常在别的 tick → 信任净变化≈0）。
+                        # 窗口化：语言使用后 5 tick 内吃到都算强化。
+                        lang_recent = (self.tick
+                                       - getattr(self, '_language_used_tick', -999)) <= 5
+                        if lang_recent:
                             self._language_trust = min(1.0, self._language_trust + 0.1)
                 # P8a: 用了语言但没找到食物 → 可信度缓慢衰减（假线索坍缩）
                 # 衰减慢于恢复（信任易碎但可重建），-0.002→-0.0005
-                if (self._language_used_tick == self.tick
+                # 窗口与强化一致（5 tick——review 修复）
+                if (self.tick - getattr(self, '_language_used_tick', -999) <= 5
                         and env_energy < 0.01):
                     self._language_trust = max(0.0, self._language_trust - 0.0005)
                 if abs(env_water) > 0.001:
@@ -938,10 +950,14 @@ class AGI:
                     np.asarray(obs, dtype=np.float32), True, v=v_now)
                 # ③ 符号化：概念激活时同时出现的语言 token → 共现绑定
                 # （Hebbian——"食物概念 ↔ 'food' 词"从经验长出）
-                if cname and getattr(self.cognition, 'language_tokens', None):
+                # review 修复：窗口化（原"吃食 tick==广播 tick"概率
+                # 1/15 → 词从未绑定 → 符号激活 0）——广播后 5 tick
+                # 内吃到都算共现（用缓存的最近 tokens）
+                if cname and (self.tick - getattr(
+                        self, '_last_lang_broadcast_tick', -999) <= 5):
                     try:
                         self.concept_bank.bind_symbols(
-                            cname, self.cognition.language_tokens)
+                            cname, getattr(self, '_last_lang_tokens', []))
                     except Exception:
                         pass
             # 每 300 tick 生成一次组合式反事实（记录为内部"假设场景"）

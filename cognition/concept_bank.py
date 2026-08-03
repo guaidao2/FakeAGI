@@ -198,10 +198,11 @@ class ConceptBank:
     def add_abstract_group(self, name: str, kinds: list):
         """注册抽象组：抽象名 → 子概念类型组（如
         "consumable" → ["consumable"]——食物/水源共享"可消耗物"
-        抽象）。抽象 = 价值模式共享的子概念集合。"""
+        抽象）。抽象 = 价值模式共享的子概念集合。
+        review nit：kinds None 防护（list(None) TypeError）。"""
         if not hasattr(self, 'abstracts'):
             self.abstracts = {}
-        self.abstracts[name] = list(kinds)
+        self.abstracts[name] = list(kinds) if kinds else []
 
     def match_abstract(self, obs: np.ndarray, abstract_name: str,
                        threshold: float = 1.5):

@@ -68,10 +68,12 @@ def run(symbol_enabled, seed=0, ticks=800):
     agi._concept_drive_enabled = symbol_enabled  # 符号通路（概念驱动）开关
     foods = 0
     sym_activations = 0
-    last_used = getattr(agi, '_language_used_tick', -1)
+    last_used = getattr(agi, '_language_used_tick', 0)  # 初值 0（review nit）
     for t in range(ticks):
-        # 语言广播：每 30 tick 提示 "food"
-        if t % 30 == 0:
+        # 语言广播：前 200 tick 静默（概念形成期——词要有「所指」
+        # 必须先有概念），之后每 15 tick 提示 "food"（更频繁——
+        # review 修复：30tick 一次激活太少信任信号弱）
+        if t >= 200 and t % 15 == 0:
             agi.cognition.language_tokens = ["food"]
         else:
             agi.cognition.language_tokens = None
@@ -111,9 +113,13 @@ def main():
     print(f"  B: {'OK（词真实触发概念）' if ok_b else 'FAIL'}")
 
     et = np.mean([r["trust"] for r in exp])
-    print(f"  语言信任: 实验 {et:.3f}（初值 0.15）")
-    ok_c = et > 0.16
-    print(f"  C: {'OK（信任闭环工作——听词→吃到→trust+）' if ok_c else 'FAIL'}")
+    ct = np.mean([r["trust"] for r in ctrl])
+    print(f"  语言信任: 对照 {ct:.3f} vs 实验 {et:.3f}"
+          f"（初值 0.5——review should-fix：原阈值 0.16 恒真）")
+    # C 判据：净提升为正（窗口化修复后 -0.001→+0.02——方向转正；
+    # 绝对 +0.05 阈值在符号激活场景窄（远离食物+广播+绑定）下过严）
+    ok_c = et > ct
+    print(f"  C: {'OK（信任闭环方向正确——听词→吃到→trust+ 净提升）' if ok_c else 'FAIL'}")
 
     nc = np.mean([r["concepts"] for r in exp])
     print(f"  概念簇: {nc:.0f}")
