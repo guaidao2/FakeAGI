@@ -88,36 +88,6 @@ class BlindFoodEnv:
         ed = 0.2 if eat else -0.0015
         wd = 0.15 if drink else -0.002
         return {"energy_delta": ed, "water_delta": wd}
-    """食物环境（说者用）：采集语义 + 可被发现"""
-    def __init__(self, size=10):
-        self.size = size
-        self.tick = 0
-        self.pos = [5, 5]
-        self.food_pos = [1, 1]
-        self.water_pos = [8, 1]
-
-    def observe(self):
-        return np.array([
-            (self.food_pos[0]-self.pos[0])/self.size,
-            (self.food_pos[1]-self.pos[1])/self.size,
-            (self.water_pos[0]-self.pos[0])/self.size,
-            (self.water_pos[1]-self.pos[1])/self.size], dtype=np.float32)
-
-    def get_pos(self):
-        return self.pos
-
-    def step(self, a):
-        self.tick += 1
-        dxs = [(0,0),(0,-1),(-1,0),(1,0),(0,1)]
-        dx, dy = dxs[a % 5]
-        self.pos[0] = max(0, min(self.size-1, self.pos[0]+dx))
-        self.pos[1] = max(0, min(self.size-1, self.pos[1]+dy))
-        near_food = abs(self.pos[0]-self.food_pos[0])+abs(self.pos[1]-self.food_pos[1]) < 3
-        eat = near_food and a == 0
-        drink = abs(self.pos[0]-self.water_pos[0])+abs(self.pos[1]-self.water_pos[1]) < 2
-        ed = 0.2 if eat else -0.0015
-        wd = 0.15 if drink else -0.002
-        return {"energy_delta": ed, "water_delta": wd}
 
 
 def make_agi(env):
@@ -208,13 +178,13 @@ def main():
     dbg = run_episode([], True, 0, ticks=500)
     print(f"  通道诊断（seed0）: 听者收到词 {dbg['heard']} 次")
 
-    # 协作组 heard（通道工作）
-    ch = np.mean([run_episode([], True, s)[1] for s in seeds[:3]])
+    # 协作组 heard（通道工作——review blocking 修复：硬编码 True 无判别力）
+    ch = np.mean([run_episode([], True, s, ticks=500)[1] for s in seeds[:3]])
     print(f"  B: 听者收到词（抽样3seeds）: {ch:.0f} 次")
-    ok_b = True   # 通道实现验证由单次 debug 保证（heard 计数在 run 内）
+    ok_b = ch > 0
     print(f"     {'OK（通道工作——说者广播→听者收到）' if ok_b else 'FAIL'}")
 
-    ok = ok_a
+    ok = ok_a and ok_b
     print(f"\n  判定: {'OK 通过（语言协作不退化——社会性价值初步）' if ok else 'FAIL'}")
     return 0 if ok else 1
 
