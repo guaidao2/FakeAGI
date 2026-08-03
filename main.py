@@ -566,15 +566,29 @@ class AGI:
                         and self.cognition.language_tokens):
                     DIR_MAP = {"east": 3, "west": 2, "north": 1, "south": 4}
                     trust_eff = self._language_trust
+                    # ① 他者可靠性：语言权重 × 说话者信任（信任绑定
+                    # 在说话者而非词——社会智能核心）
+                    spk = getattr(self, '_current_speaker', None)
+                    if spk is not None:
+                        try:
+                            if getattr(self, 'speaker_trust', None) is None:
+                                from core.speaker_trust import SpeakerTrust
+                                self.speaker_trust = SpeakerTrust()
+                            trust_eff = trust_eff * self.speaker_trust.weight(spk)
+                        except Exception:
+                            pass
                     # 信任归零后周期性试探（好奇心：语言可能有用，偶尔听一下）
                     if trust_eff <= 0.15 and np.random.random() < 0.02:
                         trust_eff = 0.2
                     for w in self.cognition.language_tokens:
                         if w in DIR_MAP and trust_eff > 0.15:
-                            lang_v = self.committee.language_vote(
+                            # ④ 多轴合并（原覆盖——双轴广播只投最后一词
+                            # 卡墙）：west+north → 两个动作各加权
+                            v = self.committee.language_vote(
                                 DIR_MAP[w], trust_eff)
+                            lang_v = (v if lang_v is None
+                                      else lang_v + v)
                             self._language_used_tick = self.tick
-                            break
                 # 1. 反射投票（本能：朝主要目标）——G4 消融可禁用
                 reflex_v = self.committee.reflex_vote(
                     obs, drive_bias, self.body.get_state_dict(),
@@ -879,15 +893,36 @@ class AGI:
                         # 广播——吃到常在别的 tick → 信任净变化≈0）。
                         # 窗口化：语言使用后 5 tick 内吃到都算强化。
                         lang_recent = (self.tick
-                                       - getattr(self, '_language_used_tick', -999)) <= 5
+                                       - getattr(self, '_language_used_tick', -999)) <= 15
                         if lang_recent:
                             self._language_trust = min(1.0, self._language_trust + 0.1)
+                            # ① 他者可靠性：成功 → 说话者信任 +0.1
+                            spk = getattr(self, '_current_speaker', None)
+                            if spk is not None:
+                                try:
+                                    if getattr(self, 'speaker_trust', None) is None:
+                                        from core.speaker_trust import SpeakerTrust
+                                        self.speaker_trust = SpeakerTrust()
+                                    self.speaker_trust.observe_outcome(spk, True)
+                                except Exception:
+                                    pass
                 # P8a: 用了语言但没找到食物 → 可信度缓慢衰减（假线索坍缩）
                 # 衰减慢于恢复（信任易碎但可重建），-0.002→-0.0005
                 # 窗口与强化一致（5 tick——review 修复）
-                if (self.tick - getattr(self, '_language_used_tick', -999) <= 5
+                if (self.tick - getattr(self, '_language_used_tick', -999) <= 15
                         and env_energy < 0.01):
                     self._language_trust = max(0.0, self._language_trust - 0.0005)
+                    # ② 质疑能力：语言引导后没吃到 → 说话者信任大幅降
+                    # （-0.3——一次误导重罚；盲从不是协作是控制）
+                    spk = getattr(self, '_current_speaker', None)
+                    if spk is not None:
+                        try:
+                            if getattr(self, 'speaker_trust', None) is None:
+                                from core.speaker_trust import SpeakerTrust
+                                self.speaker_trust = SpeakerTrust()
+                            self.speaker_trust.observe_outcome(spk, False)
+                        except Exception:
+                            pass
                 if abs(env_water) > 0.001:
                     self.body.water = np.clip(self.body.water + env_water, 0, 1)
         

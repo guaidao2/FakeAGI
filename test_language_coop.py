@@ -108,50 +108,58 @@ def make_agi(env):
 
 
 def run_episode(channel, coop, seed, ticks=800):
-    """一对 agent：说者（有食物环境+会广播带方向）+ 听者（共享通道）"""
+    """一对 agent：轻量说者（预置概念+speak）+ 完整听者"""
     np.random.seed(1000 + seed)
     torch.manual_seed(1000 + seed)
+    # 轻量说者：预置"食物概念+绑定 food"（无需完整 AGI 管线——快）
+    from cognition.concept_bank import ConceptBank, Concept
+    sb = ConceptBank()
+    sc = Concept("food_c", "consumable",
+                 np.array([0.0, 0.0, 0.3, -0.3], dtype=np.float32))
+    sc.bind_symbol("food")
+    sb.concepts.append(sc)
     senv = FoodEnv()
     lenv = BlindFoodEnv()   # 盲听者（无食物感知——依赖说者广播）
-    speaker = make_agi(senv)
     listener = make_agi(lenv)
     total_food = 0
     heard = 0
+    speaker_budget = 30   # ③ 通信代价：token 预算（广播有成本）
     for t in range(ticks):
-        # 说者：匹配食物概念 → 广播 "food <方向>"（资源+方向）
+        # 说者（轻量）：观测匹配食物概念 → 广播 "food <双轴方向>"
         if coop:
-            w, _, spoke = speaker.concept_bank.speak(senv.observe())
-            if spoke and w:
-                # 说者食物方向（DIR_MAP: east=3 west=2 north=1 south=4）
+            w, _, spoke = sb.speak(senv.observe())
+            if spoke and w and speaker_budget > 0:
+                # ④ 双轴方向（完整信息——听者能导航到目标）
                 dx = senv.food_pos[0] - senv.pos[0]
                 dy = senv.food_pos[1] - senv.pos[1]
-                if abs(dx) >= abs(dy):
-                    d_word = "east" if dx > 0 else "west"
-                else:
-                    d_word = "south" if dy > 0 else "north"
-                channel.append([w, d_word])
-        # 听者：读通道（词+方向 → 现有语言通路：概念激活+方向投票）
+                x_word = "east" if dx > 0 else "west"
+                y_word = "south" if dy > 0 else "north"
+                channel.append(("speaker_0", [w, x_word, y_word]))
+                speaker_budget -= 1     # 广播消耗 token
+            # 说者移动（简化：朝食物走——发现者视角）
+            dx = senv.food_pos[0] - senv.pos[0]
+            dy = senv.food_pos[1] - senv.pos[1]
+            if abs(dx) >= abs(dy):
+                senv.pos[0] += 1 if dx > 0 else -1
+            else:
+                senv.pos[1] += 1 if dy > 0 else -1
+            senv.pos[0] = max(0, min(senv.size - 1, senv.pos[0]))
+            senv.pos[1] = max(0, min(senv.size - 1, senv.pos[1]))
+        # 听者：读通道（词+双轴方向；说话者身份随广播传入）
         if coop and channel:
-            tokens = channel.pop(0)
+            spk, tokens = channel.pop(0)
             listener.cognition.language_tokens = tokens
+            listener._current_speaker = spk   # 他者信任绑定对象
             heard += 1
         else:
             listener.cognition.language_tokens = None
+            listener._current_speaker = None
         # 步进（统计听者食物）
         lb = listener.body.energy
-        sb = speaker.body.energy
-        speaker.step()
         listener.step()
-        if speaker.body.energy > sb + 0.01:
-            # 说者吃到 → 概念形成 → 自动命名绑定（"听过才说"的
-            # 简化：概念形成即命名——模拟早期语言学习）
-            if coop and speaker.concept_bank.concepts:
-                last = speaker.concept_bank.concepts[-1]
-                if not last.symbols:
-                    speaker.concept_bank.bind_symbols(last.name, ["food"])
         if listener.body.energy > lb + 0.01:
             total_food += 1
-        if not listener.alive and not speaker.alive:
+        if not listener.alive:
             break
     return {"food": total_food, "heard": heard}
 
