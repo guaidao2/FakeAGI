@@ -152,6 +152,7 @@ class SuperpositionWorldModel(nn.Module):
         amps = self._amplitudes(h.device)
         self.optimizer.zero_grad()
         total_loss = 0.0
+        dv_preds = None  # security：dv 计算移出循环（统一一次）
         for i, b in enumerate(self.branches):
             pred = b(h.detach(), action)
             t = target.detach()
@@ -161,20 +162,23 @@ class SuperpositionWorldModel(nn.Module):
                 t = t[..., :min_d]
             loss = self.loss_fn(pred, t)
             total_loss = total_loss + amps[i] * loss
-            # A：分支级价值预测（各分支对自己的下一状态预测价值）
-            if dv_target is not None:
-                vdim = pred.shape[-1]
-                if (self.value_head is None
-                        or self.value_head.weight.shape[1] != vdim):
-                    import torch.nn as nn
-                    self.value_head = nn.Linear(vdim, 1).to(pred.device)
-                    # 维度变化 → 重建 optimizer（含 value_head 参数）
-                    self.optimizer = torch.optim.AdamW(
-                        self.parameters(), lr=0.001)
-                dv_pred = self.value_head(pred.detach())
-                dv_t = dv_target.detach().reshape(dv_pred.shape)
-                total_loss = total_loss + amps[i] * self.value_head_weight * \
-                    self.loss_fn(dv_pred, dv_t)
+        # A：叠加态价值预测（统一在循环外——security：避免循环内重建 optimizer）
+        if dv_target is not None:
+            vdim = pred.shape[-1]
+            if (self.value_head is None
+                    or self.value_head.weight.shape[1] != vdim):
+                import torch.nn as nn
+                self.value_head = nn.Linear(vdim, 1).to(pred.device)
+                # 维度变化 → 重建 optimizer（含 value_head 参数）
+                self.optimizer = torch.optim.AdamW(
+                    self.parameters(), lr=0.001)
+            dv_preds = self.value_head(pred.detach())
+            dv_t = dv_target.detach()
+            # security：numel 校验（reshape 隐式匹配 batch>1 会崩）
+            if dv_t.numel() == dv_preds.numel() and dv_t.shape != dv_preds.shape:
+                dv_t = dv_t.reshape(dv_preds.shape)
+            total_loss = total_loss + self.value_head_weight * \
+                self.loss_fn(dv_preds, dv_t)
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0)
         self.optimizer.step()
@@ -271,6 +275,9 @@ class SuperpositionWorldModel(nn.Module):
                                 pass
         self.input_dim = new_dim
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
+        # security MEDIUM：value_head 维度陈旧——重置触发惰性重建
+        # （否则 state_dict 序列化拿旧维度、optimizer 含陈旧参数）
+        self.value_head = None
 
     # ─── 序列化辅助 ───
     def branch_stats(self) -> list:

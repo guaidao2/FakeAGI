@@ -103,7 +103,8 @@ class WorldModel(nn.Module):
         if dv_target is not None:
             dv_pred = self.value_head(pred.detach())  # 从预测状态预测价值
             dv_t = dv_target.detach()
-            if dv_pred.shape != dv_t.shape:
+            # security：numel 校验（reshape 隐式匹配 batch>1 会崩）
+            if dv_t.numel() == dv_pred.numel() and dv_t.shape != dv_pred.shape:
                 dv_t = dv_t.reshape(dv_pred.shape)
             loss = loss + self.value_head_weight * self.loss_fn(dv_pred, dv_t)
         self.optimizer.zero_grad()
