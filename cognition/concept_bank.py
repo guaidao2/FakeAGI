@@ -168,7 +168,9 @@ class ConceptBank:
     # ─── 阶段 3：符号化（词↔概念绑定）───
     def bind_symbols(self, concept_name: str, symbols: list):
         """概念绑定一组词（共现学习——概念激活时听到的词）。
-        幂等；未知概念名忽略。"""
+        幂等；未知概念名忽略。security LOW：symbols None/非列表防护。"""
+        if not symbols:
+            return False
         for c in self.concepts:
             if c.name == concept_name:
                 for s in symbols:
@@ -178,7 +180,10 @@ class ConceptBank:
 
     def activate_by_symbol(self, symbol: str):
         """符号→概念：听到词返回绑定的概念 (name, value_pred, found)。
-        found=True 表示词有"所指"（绑定过概念）——语言接地。"""
+        found=True 表示词有"所指"（绑定过概念）——语言接地。
+        security LOW：None 显式防护（与 Concept 级对称）。"""
+        if symbol is None:
+            return "", 0.0, False
         s = str(symbol).strip().lower()
         if not s:
             return "", 0.0, False
