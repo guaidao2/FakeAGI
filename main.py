@@ -494,8 +494,13 @@ class AGI:
                     action = np.random.randint(0, 4)
             
             # 学习驱动的反射抑制：当 GameNN 学到可靠策略时，抑制本能反射
+            # review 修复（概念驱动暴露）：未训练 GameNN 的随机 confidence
+            # 也可能 >0.15 → 误抑制反射 → agent 乱走（导航失效）。
+            # 加"学到位"条件：训练样本量足够才允许抑制。
             gamenn_confidence = self.cognition.gamenn.confidence if hasattr(self.cognition, 'gamenn') else 0.0
-            suppress_reflex = gamenn_confidence > 0.15
+            gamenn_trained = (getattr(self.cognition, 'gamenn', None) is not None
+                              and getattr(self.cognition.gamenn, 'update_count', 0) > 100)
+            suppress_reflex = gamenn_confidence > 0.15 and gamenn_trained
 
             # ─── 情绪系统：生理+认知→情绪向量→探索率调制（默认关闭，零影响）───
             if getattr(self, '_emotion_enabled', False):
@@ -788,6 +793,30 @@ class AGI:
                 and getattr(self, 'override_action', -1) >= 0):
             # security warn 修复：睡眠时陈旧意图清除（防醒来后生效一 tick）
             self.override_action = -1
+        # ─── 概念驱动行为（DESIGN_CONCEPTS §3 阶段 2 前置）───
+        # 概念匹配→行为引导：观测"像"可消耗物 + 饥饿（能量<0.5）→
+        # 倾向停留（动作 0）尝试交互（吃判定在 env.step）。防死锁：
+        # 连续停留 _concept_stay_max tick 无 V 上升→放弃（恢复自主）。
+        # 护栏：概念是内部形成（身体经验压缩）——非外部奖励注入；
+        # 与 override 通路同层（决策后执行前）。
+        elif (not self.body.is_sleeping
+                and getattr(self, '_concept_drive_enabled', True)):
+            try:
+                # 匹配阈值 0.8（默认 1.5 过宽——"有点像"就停=误停
+                # 浪费探索 tick→死亡增加；0.8=确实在可消耗物旁）
+                matched = self.concept_bank.match_concept(obs, threshold=0.8)
+                # 触发条件 energy<1.5（非极饿 0.5——设计缺陷修复：
+                # 在食物旁时 energy 通常高（刚吃过），饿到 <0.5 时
+                # 已远离食物——互斥永不触发！<1.5="还能吃"→
+                # 周期性采集行为：满 2.0 离开，降到 1.5 回来停吃）
+                if matched[2] and self.body.energy < 1.5:
+                    self._concept_stay = getattr(self, '_concept_stay', 0) + 1
+                    if self._concept_stay <= getattr(self, '_concept_stay_max', 5):
+                        action = 0  # 停留尝试交互（吃到则 V 上升）
+                else:
+                    self._concept_stay = 0
+            except Exception:
+                self._concept_stay = 0
 
         # security warn 归因注释：override 覆盖点位于 MoE 学习之后——
         # 覆盖前决策的 MoE 学习会用 override 动作产生的 reward 更新，

@@ -98,6 +98,27 @@ class ConceptBank:
             return name
         return ""
     
+    # ─── 概念驱动行为（DESIGN_CONCEPTS §3 阶段 2 前置：概念→行为）───
+    def match_concept(self, obs: np.ndarray, kind: str = "consumable",
+                      threshold: float = 1.5):
+        """观测→概念匹配：找与 obs 最相似的概念（欧氏距离，与
+        add_value_anchored 同度量）。返回 (name, dist, matched)——
+        匹配则 matched=True（当前环境特征"像"该概念）。
+        概念驱动行为用：匹配 consumable → 引导停留/交互倾向。"""
+        if obs is None or len(obs) == 0:
+            return "", 1e9, False
+        vec = np.asarray(obs, dtype=np.float32).flatten()
+        dim = vec.shape[0]
+        best_i, best_d = -1, 1e9
+        for i, c in enumerate(self.concepts):
+            if c.kind == kind and c.vector.shape[0] == dim:
+                d = float(np.linalg.norm(c.vector - vec))
+                if d < best_d:
+                    best_i, best_d = i, d
+        if best_i >= 0 and best_d < threshold:
+            return self.concepts[best_i].name, best_d, True
+        return "", best_d, False
+
     def generate_combo(self, n: int = 3) -> list:
         """
         组合式反事实生成：
