@@ -27,7 +27,7 @@
 > - ✅ **统一 seed 基建 + E14 定论（下阶段）**：原 seeds 1-5 实为**同一 RNG 流连续分段**（main() 固定 seed(42) 但 run_episode 循环内不重置——AGI 内部 epsilon/探索/goal_gen 裸 np.random 全受影响）——"base 反超"是伪 seed 隔离**假象**！统一 seed（每 episode np.random.seed(1000+s)+torch.manual_seed(1000+s)）后重跑：**全模块 2.0±2.1 vs 对照 1.2±1.2——全模块占优，方向反转**；睡眠 0→202 次（伪象修正）——E14 矛盾消解
 > - ✅ **value_head 输入信号改进（下阶段）**：pred→target（当前 hidden）——学恒均值问题解决：预测-真值 r=0.422 + 高低区分 1.010 vs 0.710 + 行为不退化（test_value_converge A/B/C 全 OK）；A 判据 mse→相关性（学区分期 mse 上升≠坏，均值拟合 mse 小≠好）
 > - ✅ **概念层接主循环（abffea4）**：价值锚聚类→concept_bank→主循环——正回报（_food_recently_tick，energy_delta 是代谢默认值——初版恒 False 修复）观测进"可消耗物"簇；验证 consumable freq=99（600 tick）概念从身体经验长出
-> - ✅ **概念驱动行为（b6269c9+c844e7b+d192757）**：match_concept 接口 + 主循环概念引导（匹配可消耗物+energy<1.5→停留交互防死锁+动态放弃）——**n=10+Fisher 科学定论（诚实）：A 食物 20.7 vs 20.8 持平（无显著收益）+ B 停留 0→2.0 机制真实生效（概念→行为通路接通）+ C 概念簇形成 + D Fisher p=0.244>0.05（6vs8 死亡差为种子噪声——引导中性，无显著副作用）**——通路接通验证完成，引导策略无净收益（需更优策略：严格匹配/停留时采样），不硬凑；调试修复：TestEnv get_pos 缺失致 AGI.pos 恒[0,0] + set_cognition 缺失致无决策恒停留 + 反射抑制静默失效（update_count 属性名错→strategy_update_counts）+ Fisher 公式 n 修正
+> - ✅ **概念驱动行为（b6269c9+c844e7b+d192757+6f360c5）**：match_concept 接口 + 主循环概念引导（匹配可消耗物+energy<1.5→停留交互防死锁+动态放弃）——**n=10+Fisher 双侧科学定论（诚实）：A 食物 20.7 vs 20.8 持平（无显著收益）+ B 停留 0→2.0 机制真实生效（概念→行为通路接通）+ C 概念簇形成 + D Fisher 双侧 p≈0.49>0.05（6vs8 死亡差为种子噪声——引导中性，无显著副作用）**——通路接通验证完成，引导策略无净收益（需更优策略：严格匹配/停留时采样），不硬凑；调试修复：TestEnv get_pos 缺失致 AGI.pos 恒[0,0] + set_cognition 缺失致无决策恒停留 + 反射抑制静默失效（update_count 属性名错→strategy_update_counts）+ Fisher 公式 n 修正（n_total=20）+ 双侧化
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
