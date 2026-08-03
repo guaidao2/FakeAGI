@@ -179,7 +179,8 @@ def main():
     print(f"  通道诊断（seed0）: 听者收到词 {dbg['heard']} 次")
 
     # 协作组 heard（通道工作——review blocking 修复：硬编码 True 无判别力）
-    ch = np.mean([run_episode([], True, s, ticks=500)[1] for s in seeds[:3]])
+    ch = np.mean([run_episode([], True, s, ticks=500)["heard"]
+                  for s in seeds[:3]])
     print(f"  B: 听者收到词（抽样3seeds）: {ch:.0f} 次")
     ok_b = ch > 0
     print(f"     {'OK（通道工作——说者广播→听者收到）' if ok_b else 'FAIL'}")
