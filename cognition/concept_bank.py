@@ -72,6 +72,8 @@ class ConceptBank:
         self.concepts = []
         self.max_concepts = max_concepts
         self.combo_history = deque(maxlen=100)
+        # ① 阶段 4：抽象组（概念图——抽象名 → 子概念类型组）
+        self.abstracts = {"consumable": ["consumable"]}  # 默认注册
     
     def extract_from_obs(self, obs: np.ndarray, action: int, result: dict) -> None:
         """从一次经验中提取概念"""
@@ -191,6 +193,30 @@ class ConceptBank:
             if c.activate_by_symbol(s):
                 return c.name, c.predict_value(), True
         return "", 0.0, False
+
+    # ─── ① 阶段 4：概念组合（概念图——抽象层）───
+    def add_abstract_group(self, name: str, kinds: list):
+        """注册抽象组：抽象名 → 子概念类型组（如
+        "consumable" → ["consumable"]——食物/水源共享"可消耗物"
+        抽象）。抽象 = 价值模式共享的子概念集合。"""
+        if not hasattr(self, 'abstracts'):
+            self.abstracts = {}
+        self.abstracts[name] = list(kinds)
+
+    def match_abstract(self, obs: np.ndarray, abstract_name: str,
+                       threshold: float = 1.5):
+        """抽象匹配：任一子概念类型匹配 → 抽象激活。
+        返回 (matched, value_pred)——跨子概念泛化
+        （"可消耗物"抽象：食物簇或水源簇观测都激活）。"""
+        kinds = getattr(self, 'abstracts', {}).get(abstract_name, [])
+        if not kinds:
+            return False, 0.0
+        for kind in kinds:
+            _, _, m, vp = self.match_concept(obs, kind=kind,
+                                             threshold=threshold)
+            if m:
+                return True, vp
+        return False, 0.0
 
     def generate_combo(self, n: int = 3) -> list:
         """
