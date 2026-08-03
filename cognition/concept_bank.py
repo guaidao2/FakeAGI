@@ -30,6 +30,7 @@ class Concept:
         self.value_ema = 0.5      # 初始中性（V∈[0,1]）
         self.value_count = 0
         self.value_history = deque(maxlen=20)
+        self.symbols = []         # 阶段 3：绑定到本概念的词（符号化）
 
     def predict_value(self) -> float:
         """预测该概念的价值（出现时 V 的 EMA）——引导条件用"""
@@ -47,6 +48,19 @@ class Concept:
     
     def __repr__(self):
         return f"[Concept {self.kind}:{self.name} f={self.freq} v={self.value_ema:.2f}]"
+
+    # ─── 阶段 3：符号化（词↔概念绑定——"语言是符号压缩"落地）───
+    def bind_symbol(self, symbol: str):
+        """绑定一个语言符号（词）到本概念——共现学习（Hebbian）：
+        概念激活时同时出现的词 → 绑定。重复绑定幂等。"""
+        s = str(symbol).strip().lower()
+        if s and s not in self.symbols:
+            self.symbols.append(s)
+
+    def activate_by_symbol(self, symbol: str) -> bool:
+        """符号激活：词是否绑定本概念（听到词→概念被激活）"""
+        s = str(symbol).strip().lower()
+        return bool(s and s in self.symbols)
 
 
 class ConceptBank:
@@ -147,6 +161,28 @@ class ConceptBank:
         # review warn：不匹配分支必须同 4 元组契约（原 3 元组——
         # main.py matched[3] 会 IndexError）
         return "", best_d, False, 0.0
+
+    # ─── 阶段 3：符号化（词↔概念绑定）───
+    def bind_symbols(self, concept_name: str, symbols: list):
+        """概念绑定一组词（共现学习——概念激活时听到的词）。
+        幂等；未知概念名忽略。"""
+        for c in self.concepts:
+            if c.name == concept_name:
+                for s in symbols:
+                    c.bind_symbol(s)
+                return True
+        return False
+
+    def activate_by_symbol(self, symbol: str):
+        """符号→概念：听到词返回绑定的概念 (name, value_pred, found)。
+        found=True 表示词有"所指"（绑定过概念）——语言接地。"""
+        s = str(symbol).strip().lower()
+        if not s:
+            return "", 0.0, False
+        for c in self.concepts:
+            if c.activate_by_symbol(s):
+                return c.name, c.predict_value(), True
+        return "", 0.0, False
 
     def generate_combo(self, n: int = 3) -> list:
         """

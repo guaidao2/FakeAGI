@@ -809,6 +809,16 @@ class AGI:
                 # 匹配阈值 0.35（终审 nit 修正：原注释"5 格"过时——
                 # 0.35 观测空间≈3 格内，与吃判定 <3 格口径对齐）
                 matched = self.concept_bank.match_concept(obs, threshold=0.35)
+                # ③ 符号激活：语言 token 命中概念符号 → 等同匹配
+                # （听到"food"→激活 consumable 概念——语言接地行为）
+                if (not matched[2] and not self.body.is_sleeping
+                        and getattr(self.cognition, 'language_tokens', None)):
+                    for w in self.cognition.language_tokens:
+                        cname, vpred, found = self.concept_bank.activate_by_symbol(w)
+                        if found:
+                            matched = (cname, 0.0, True, vpred)
+                            self._symbol_activated_tick = self.tick
+                            break
                 # 触发条件 energy<1.5（非极饿 0.5——设计缺陷修复：
                 # 在食物旁时 energy 通常高（刚吃过），饿到 <0.5 时
                 # 已远离食物——互斥永不触发！<1.5="还能吃"→
@@ -920,8 +930,16 @@ class AGI:
             if v_up:
                 # ①+②：传当前 V 值（概念价值预测——predict_value 引导用）
                 v_now = (self.body.energy / 2.0 + self.body.water) / 2.0
-                self.concept_bank.add_value_anchored(
+                cname = self.concept_bank.add_value_anchored(
                     np.asarray(obs, dtype=np.float32), True, v=v_now)
+                # ③ 符号化：概念激活时同时出现的语言 token → 共现绑定
+                # （Hebbian——"食物概念 ↔ 'food' 词"从经验长出）
+                if cname and getattr(self.cognition, 'language_tokens', None):
+                    try:
+                        self.concept_bank.bind_symbols(
+                            cname, self.cognition.language_tokens)
+                    except Exception:
+                        pass
             # 每 300 tick 生成一次组合式反事实（记录为内部"假设场景"）
             if self.tick % 300 == 0:
                 combo = self.concept_bank.generate_combo(n=3)
