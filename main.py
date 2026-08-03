@@ -112,7 +112,7 @@ class AGI:
         self.transfer_feedback_tick = 0
         # P8a: 语言可信度（可学习先验——听词结果好则强化，差则坍缩）
         self._language_trust = 0.5  # 初始半信半疑（可被经验修正）
-        self._language_used_tick = 0
+        self._language_used_tick = -999  # security info：0→-999（tick<5 时"从未用语言"与"tick 0 用过"不可区分——与广播缓存一致）
         
         # ─── 运行状态 ───
         self.tick = 0
