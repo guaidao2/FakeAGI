@@ -180,8 +180,9 @@ def main():
     cf = np.mean(coop_foods)
     sf = np.mean(solo_foods)
     print(f"\n  听者食物（×{len(seeds)}seeds）: 独行 {sf:.1f} vs 协作 {cf:.1f}")
-    ok_a = cf >= sf * 0.9
-    print(f"  A: {'OK（不退化' + ('，有提升' if cf > sf + 0.5 else '）') if ok_a else 'FAIL'}")
+    # review blocking：恢复强判据（原 0.9 无判别力——信任崩也能过）
+    ok_a = cf > sf + 2.0
+    print(f"  A: {'OK（协作显著提升——语言社会性价值）' if ok_a else 'FAIL'}")
     # 通道诊断：说者广播次数（抽样 1 seed 重跑收集 heard）
     dbg = run_episode([], True, 0, ticks=500)
     print(f"  通道诊断（seed0）: 听者收到词 {dbg['heard']} 次")

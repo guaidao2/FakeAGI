@@ -577,6 +577,9 @@ class AGI:
                             trust_eff = trust_eff * self.speaker_trust.weight(spk)
                         except Exception:
                             pass
+                    # review should-fix：缓存投票时说话者（反馈归因用——
+                    # 多说话者/无广播 tick 时 _current_speaker 已变）
+                    self._last_lang_speaker = spk
                     # 信任归零后周期性试探（好奇心：语言可能有用，偶尔听一下）
                     if trust_eff <= 0.15 and np.random.random() < 0.02:
                         trust_eff = 0.2
@@ -897,7 +900,8 @@ class AGI:
                         if lang_recent:
                             self._language_trust = min(1.0, self._language_trust + 0.1)
                             # ① 他者可靠性：成功 → 说话者信任 +0.1
-                            spk = getattr(self, '_current_speaker', None)
+                            # （归因用投票时缓存 _last_lang_speaker）
+                            spk = getattr(self, '_last_lang_speaker', None)
                             if spk is not None:
                                 try:
                                     if getattr(self, 'speaker_trust', None) is None:
@@ -908,21 +912,28 @@ class AGI:
                                     pass
                 # P8a: 用了语言但没找到食物 → 可信度缓慢衰减（假线索坍缩）
                 # 衰减慢于恢复（信任易碎但可重建），-0.002→-0.0005
-                # 窗口与强化一致（5 tick——review 修复）
+                # 窗口与强化一致（15 tick——review 修复）
                 if (self.tick - getattr(self, '_language_used_tick', -999) <= 15
                         and env_energy < 0.01):
                     self._language_trust = max(0.0, self._language_trust - 0.0005)
                     # ② 质疑能力：语言引导后没吃到 → 说话者信任大幅降
                     # （-0.3——一次误导重罚；盲从不是协作是控制）
-                    spk = getattr(self, '_current_speaker', None)
-                    if spk is not None:
-                        try:
-                            if getattr(self, 'speaker_trust', None) is None:
-                                from core.speaker_trust import SpeakerTrust
-                                self.speaker_trust = SpeakerTrust()
-                            self.speaker_trust.observe_outcome(spk, False)
-                        except Exception:
-                            pass
+                    # review blocking 修复：失败按"每次语言使用"去重
+                    # 结算（原逐 tick 计数——窗口内每个非进食 tick -0.3
+                    # → 2 tick 信任清零，远程导航必然崩）；归因用投票
+                    # 时缓存的 _last_lang_speaker（非当前——防记错人）
+                    last_settled = getattr(self, '_last_fail_settled_tick', -999)
+                    if last_settled != self._language_used_tick:
+                        self._last_fail_settled_tick = self._language_used_tick
+                        spk = getattr(self, '_last_lang_speaker', None)
+                        if spk is not None:
+                            try:
+                                if getattr(self, 'speaker_trust', None) is None:
+                                    from core.speaker_trust import SpeakerTrust
+                                    self.speaker_trust = SpeakerTrust()
+                                self.speaker_trust.observe_outcome(spk, False)
+                            except Exception:
+                                pass
                 if abs(env_water) > 0.001:
                     self.body.water = np.clip(self.body.water + env_water, 0, 1)
         
