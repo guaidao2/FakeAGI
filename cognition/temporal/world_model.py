@@ -28,6 +28,11 @@ class WorldModel(nn.Module):
         )
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
         self.loss_fn = nn.MSELoss()
+        # A 步骤（DESIGN_CONCEPTS §8 信号空转修复）：价值头——
+        # 世界模型不只预测 next_hidden，还预测价值变化 ΔV
+        # （= f(energy, water) 的真实身体读数；"预测世界为身体而预测"）
+        self.value_head = nn.Linear(input_dim, 1)
+        self.value_head_weight = 0.5
         # B3 接线（DESIGN_CONCEPTS §7.5/meta-RL）：慢副本 EMA——
         # 快权重每 tick 更新（快速适应），慢影子按 EMA 追踪长期统计；
         # 稳态门控（高应激/低能量冻结慢更新——Hubel 可塑性门控最小版）
@@ -87,13 +92,20 @@ class WorldModel(nn.Module):
         return self.predictor(combined)
     
     def train_step(self, h: torch.Tensor, target: torch.Tensor, action: torch.Tensor = None,
-                   gate: float = 1.0) -> float:
+                   gate: float = 1.0, dv_target: torch.Tensor = None) -> float:
         pred = self.predict(h.detach(), action)
         if pred.shape[-1] != target.shape[-1]:
             min_d = min(pred.shape[-1], target.shape[-1])
             pred = pred[..., :min_d]
             target = target[..., :min_d]
         loss = self.loss_fn(pred, target.detach())
+        # A 步骤：价值头监督（ΔV 预测——真实身体读数，有内容）
+        if dv_target is not None:
+            dv_pred = self.value_head(pred.detach())  # 从预测状态预测价值
+            dv_t = dv_target.detach()
+            if dv_pred.shape != dv_t.shape:
+                dv_t = dv_t.reshape(dv_pred.shape)
+            loss = loss + self.value_head_weight * self.loss_fn(dv_pred, dv_t)
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0)
@@ -151,6 +163,15 @@ class WorldModel(nn.Module):
         self.input_dim = new_dim
         if dev is not None:
             self.to(dev)
+        # A 步骤：价值头随生长重建（新维度）+ 拷贝旧权重
+        old_vw = self.value_head.weight.data.clone().cpu()
+        old_vb = self.value_head.bias.data.clone().cpu()
+        self.value_head = nn.Linear(new_dim, 1)
+        with torch.no_grad():
+            h = min(old_vw.shape[1], new_dim)
+            self.value_head.weight[:, :h] = old_vw[:, :h]
+            if old_vb is not None:
+                self.value_head.bias[:] = old_vb[:]
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
         # B3：生长后 shadow 重注册（维度变化——防尺寸不匹配）
         self._register_shadow()

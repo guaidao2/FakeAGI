@@ -304,17 +304,27 @@ class CognitionPipeline:
             # 感知通路：更新世界模型（置信度门控，条件于动作）
             # B3：稳态门控——应激高/能量低时冻结慢学习（保护已有表征）
             gate = 1.0
+            dv_target = None
             try:
                 b = self.agi.body if hasattr(self, 'agi') and self.agi else None
                 if b is not None:
                     # nit：clamp 上下限（gate ∈ [0,1]）
                     gate = min(1.0, max(0.0, 1.0 - b.stress * 2.0
                                         - max(0.0, 0.3 - b.energy) * 3.0))
+                    # A 步骤：价值变化目标（真实身体读数——有内容的信号）
+                    prev_e = getattr(b, '_prev_energy', b.energy)
+                    prev_w = getattr(b, '_prev_water', b.water)
+                    dv = ((b.energy - prev_e) * 5.0
+                          + (b.water - prev_w) * 5.0)
+                    dv_target = torch.tensor(
+                        [float(max(-1.0, min(1.0, dv)))],
+                        dtype=torch.float32,
+                        device=next(self.world_model.parameters()).device)
             except Exception:
                 pass
             world_loss = self.world_model.train_step(
                 prev_h.detach(), self.hidden.detach(), action=act_t,
-                gate=gate)
+                gate=gate, dv_target=dv_target)
             
             # P1b: 多专家世界模型分情境训练（若 MoE 激活可用）
             try:
@@ -348,6 +358,7 @@ class CognitionPipeline:
             
             self._check_growth(world_loss)
         else:
+            world_loss = 0.0  # A：else 分支初始化（info 组装用）
             self._check_growth(0.0)
 
         # GameNN 状态相关决策（如果 LNN 维度变动，截断/填充到 GameNN 固定维度）
@@ -375,6 +386,9 @@ class CognitionPipeline:
             "strategy": strategy_idx,
             "energy_delta": -0.001,
             "error_path": error_path,
+            # A 步骤接线修复：world_loss 必须进 info——
+            # 否则 main.py info.get("world_loss", 0.5) 恒取默认值（信号空转）
+            "world_loss": world_loss,
         }
         return action, info
 

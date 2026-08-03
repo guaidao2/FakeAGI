@@ -81,6 +81,10 @@ class SuperpositionWorldModel(nn.Module):
         ])
         self.optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
         self.loss_fn = nn.MSELoss()
+        # A 步骤：叠加态价值头（多假设价值——各分支预测 ΔV 后振幅加权）
+        # 惰性创建：pred 实际维度可能 ≠ input_dim（hidden 拼接），首次匹配
+        self.value_head = None
+        self.value_head_weight = 0.5
         self.collapse_temp = 1.0
         self.collapse_history = []  # (tick, dominant_branch, entropy)
         self.last_entropy = 0.0
@@ -140,10 +144,11 @@ class SuperpositionWorldModel(nn.Module):
 
     # ─── 训练 ───
     def train_step(self, h: torch.Tensor, target: torch.Tensor,
-                   action: torch.Tensor = None, gate: float = 1.0) -> float:
+                   action: torch.Tensor = None, gate: float = 1.0,
+                   dv_target: torch.Tensor = None) -> float:
         """训练所有分支（振幅加权损失：被证据支持的分支优先学习）
-        B3 兼容：gate 参数——叠加态版本不做慢副本（分支即多假设），
-        接收但忽略（保持调用方接口一致）"""
+        A 步骤：叠加态价值预测——加权输出经 value_head 预测 ΔV
+        （多假设价值的坍缩；B3 gate 忽略——分支即多假设无慢副本）"""
         amps = self._amplitudes(h.device)
         self.optimizer.zero_grad()
         total_loss = 0.0
@@ -156,6 +161,20 @@ class SuperpositionWorldModel(nn.Module):
                 t = t[..., :min_d]
             loss = self.loss_fn(pred, t)
             total_loss = total_loss + amps[i] * loss
+            # A：分支级价值预测（各分支对自己的下一状态预测价值）
+            if dv_target is not None:
+                vdim = pred.shape[-1]
+                if (self.value_head is None
+                        or self.value_head.weight.shape[1] != vdim):
+                    import torch.nn as nn
+                    self.value_head = nn.Linear(vdim, 1).to(pred.device)
+                    # 维度变化 → 重建 optimizer（含 value_head 参数）
+                    self.optimizer = torch.optim.AdamW(
+                        self.parameters(), lr=0.001)
+                dv_pred = self.value_head(pred.detach())
+                dv_t = dv_target.detach().reshape(dv_pred.shape)
+                total_loss = total_loss + amps[i] * self.value_head_weight * \
+                    self.loss_fn(dv_pred, dv_t)
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0)
         self.optimizer.step()

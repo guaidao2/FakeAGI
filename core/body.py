@@ -54,6 +54,9 @@ class BodyModel:
            was_moved_passively: 是否被外力移动（非自主移动）
         """
         self.age_ticks += 1
+        # A 步骤：记录前一 tick 能量/水分（世界模型 ΔV 目标用）
+        self._prev_energy = self.energy
+        self._prev_water = self.water
         
         # 被动位移检测
         if was_moved_passively:
