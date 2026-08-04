@@ -100,12 +100,12 @@ def main():
     halive = sum(1 for r in hint_r if r["alive"])
     print(f"  A(direct 直控): 食物 {df:.1f}±{np.std([r['food'] for r in dir_r]):.1f}"
           f" | 存活 {dalive}/10")
-    print(f"  B(hint 喂GameNN): 食物 {hf:.1f}±{np.std([r['food'] for r in hint_r]):.1f}"
+    print(f"  B(hint 概念投票): 食物 {hf:.1f}±{np.std([r['food'] for r in hint_r]):.1f}"
           f" | 存活 {halive}/10")
     if hf >= df:
-        verdict = "hint≥direct——价值经学习系统可行（护栏字面可守）"
+        verdict = "hint≥direct——价值经决策层可行（护栏字面可守；边界：委员会弱票够用）"
     else:
-        verdict = "direct>hint——价值直驱必要（③ 动机选择器裁决成立）"
+        verdict = "direct>hint——价值直驱必要（③ 动机选择器裁决；hint 存活更高=不锁定行为）"
     print(f"  裁决: {verdict}")
     return 0
 

@@ -107,9 +107,15 @@ class DecisionCommittee:
         return vote
     
     def compute_weights(self, health: float, stress: float,
-                        confidence: float, energy: float) -> dict:
-        """情境权重：由危机程度和置信度动态调整"""
+                        confidence: float, energy: float,
+                        concept_active: bool = False) -> dict:
+        """情境权重：由危机程度和置信度动态调整
+        concept_active：本 tick 是否有 concept 票——无票时从分母剔除
+        concept 权重（direct 模式零影响严格成立：归一化分母恢复
+        1.30，argmax/conflict/language 加成全部严格复原）"""
         w = dict(self.weights)
+        if not concept_active:
+            w.pop("concept", None)  # review should-fix：分母剔除
         
         # 恐慌模式：健康极低 + 应激高 → 反射/边缘主导，规划/语言归零
         self.panic_mode = health < 0.3 and stress > 0.5
@@ -157,7 +163,9 @@ class DecisionCommittee:
         - 冲突检测：前两名接近 → 报告 conflict（供外部深思）
         """
         self.exploration_ratio = exploration_ratio
-        w = self.compute_weights(health, stress, confidence, energy)
+        w = self.compute_weights(health, stress, confidence, energy,
+                                 concept_active=("concept" in votes
+                                                 and votes["concept"] is not None))
         self.last_votes = {k: v.tolist() for k, v in votes.items() if v is not None}
         
         # 加权求和
