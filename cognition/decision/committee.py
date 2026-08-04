@@ -127,7 +127,10 @@ class DecisionCommittee:
             w["meta"] = 0.0
             w["language"] = 0.0  # 危机时不听词（保命优先）
             w["concept"] = 0.0   # 恐慌时不听概念（同语言——保命优先）
-            return w
+            # security LOW：归一化（原靠常量巧合恰为 1.0——未来调
+            # panic 权重会破坏尺度）
+            total = sum(w.values())
+            return {k: v / total for k, v in w.items()}
         
         # 深思模式：置信度低（学习期）或冲突 → 规划/元认知权重提升
         self.conflict_mode = confidence < 0.15

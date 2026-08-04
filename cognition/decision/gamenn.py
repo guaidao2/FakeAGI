@@ -127,7 +127,15 @@ class GameNNDecision:
         # TD 目标
         with torch.no_grad():
             if next_state is not None and not done:
-                ns = torch.tensor(next_state, dtype=torch.float32, device=self.device).unsqueeze(0)
+                # security MEDIUM：next_state 同样做维度防护（对称于
+                # last_state——注释"同理"必须真做：未来调用方若传旧维
+                # 会 q_net(ns) shape mismatch 崩溃主循环）
+                ns_arr = np.asarray(next_state, dtype=np.float32).flatten()
+                if len(ns_arr) != sd_now:
+                    ns_arr = (ns_arr[:sd_now] if len(ns_arr) > sd_now
+                              else np.pad(ns_arr, (0, sd_now - len(ns_arr))))
+                ns = torch.tensor(ns_arr, dtype=torch.float32,
+                                  device=self.device).unsqueeze(0)
                 next_q = q_net(ns).max().item()
                 target = reward + self.gamma * next_q
             else:
