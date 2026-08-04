@@ -31,6 +31,9 @@ class DecisionCommittee:
             "plan": 0.10,       # 规划/前额叶
             "meta": 0.05,       # 元认知
             "language": 0.30,   # 语言指令（主动请求的信息优先——意图）
+            "concept": 0.20,    # 概念（动机选择器——③：身体经验压缩
+                                # 的"关注选择器"；价值经委员会加权，
+                                # 不直驱动作——护栏裁决 B 模式）
         }
         self.last_votes = {}
         self.conflict_mode = False   # 深思模式
@@ -113,6 +116,7 @@ class DecisionCommittee:
             w["plan"] = 0.0
             w["meta"] = 0.0
             w["language"] = 0.0  # 危机时不听词（保命优先）
+            w["concept"] = 0.0   # 恐慌时不听概念（同语言——保命优先）
             return w
         
         # 深思模式：置信度低（学习期）或冲突 → 规划/元认知权重提升

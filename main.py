@@ -10,6 +10,7 @@ AGI 主入口 — 自维持循环（生物模拟版）
   认知核心（LNN + World Model + GameNN）
 """
 
+import os
 import time
 import numpy as np
 from core.body import BodyModel
@@ -87,6 +88,11 @@ class AGI:
         self.metacognition = MetacognitionLayer(spatial_memory=self.spatial_memory)
         self.committee = DecisionCommittee(n_actions=5)
         self.committee_state = None
+        # 概念门控模式（护栏裁决实验——③ 动机选择器 vs 护栏字面）：
+        #   direct = 概念匹配→直接 action=0 停留（原实现——价值直驱动作）
+        #   hint   = 概念信号进 GameNN 观测（学习系统）——动作归委员会
+        # 环境变量 CONCEPT_GATE_MODE 切换；默认 direct（历史行为）
+        self._concept_gate_mode = os.environ.get("CONCEPT_GATE_MODE", "direct")
         # security warn 修复：动作数（override 值域钳制用；与 committee/MoE 一致）
         self.n_actions = 5
         # P1: MoE 专家路由（延迟创建——state_dim 由认知维度决定）
@@ -616,6 +622,27 @@ class AGI:
                         else:
                             s = s[:sd]
                         habit_v = g.get_action_probs(s)
+                # 概念投票（护栏裁决 B 模式——概念不直驱动作、不改维度：
+                # 概念信号作为委员会的一个投票通道（停留票），与
+                # reflex/limbic/habit 并列加权——价值经决策层仲裁，
+                # ③ 动机选择器语义；无 grow 冲突（LNN 生长是唯一
+                # state_dim 来源））
+                concept_v = None
+                if (self._concept_gate_mode == "hint"
+                        and getattr(self, 'concept_bank', None) is not None):
+                    try:
+                        matched = self.concept_bank.match_concept(
+                            obs, threshold=0.35)
+                        if (matched[2] and matched[3] > 0.55
+                                and self.body.energy < 1.5):
+                            _, _, danger_matched, _ = (
+                                self.concept_bank.match_concept(
+                                    obs, kind="danger", threshold=0.35))
+                            if not danger_matched:
+                                concept_v = np.zeros(self.n_actions)
+                                concept_v[0] = 0.3  # 概念停留票
+                    except Exception:
+                        concept_v = None
                 # 4. 规划投票（前瞻模拟，若有规划器）
                 plan_v = None
                 if hasattr(self.cognition, 'planner') and self.cognition.planner is not None:
@@ -658,6 +685,8 @@ class AGI:
                          "habit": habit_v, "plan": plan_v, "meta": meta_v}
                 if lang_v is not None:
                     votes["language"] = lang_v
+                if concept_v is not None:
+                    votes["concept"] = concept_v
                 decision = self.committee.decide(
                     votes,
                     health=self.body.health,
@@ -830,7 +859,8 @@ class AGI:
         # 护栏：概念是内部形成（身体经验压缩）——非外部奖励注入；
         # 与 override 通路同层（决策后执行前）。
         elif (not self.body.is_sleeping
-                and getattr(self, '_concept_drive_enabled', True)):
+                and getattr(self, '_concept_drive_enabled', True)
+                and self._concept_gate_mode != "hint"):
             try:
                 # 匹配阈值 0.35（终审 nit 修正：原注释"5 格"过时——
                 # 0.35 观测空间≈3 格内，与吃判定 <3 格口径对齐）

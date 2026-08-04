@@ -109,7 +109,15 @@ class GameNNDecision:
         if self.last_state is None or self.last_strategy is None:
             return
         
-        s = torch.tensor(self.last_state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        # 维度防护（grow 后 last_state 可能旧维——决策与学习跨 tick，
+        # grow_state_dim 重建 q_net 后旧状态需对齐；next_state 同理）
+        q_net = self.q_nets[self.last_strategy]
+        sd_now = q_net.net[0].weight.shape[1]  # StrategyQNet 是容器
+        ls = self.last_state
+        if len(ls) != sd_now:
+            ls = (ls[:sd_now] if len(ls) > sd_now
+                  else np.pad(ls, (0, sd_now - len(ls))))
+        s = torch.tensor(ls, dtype=torch.float32, device=self.device).unsqueeze(0)
         a = torch.tensor([self.last_action], dtype=torch.long, device=self.device)
         r = torch.tensor([reward], dtype=torch.float32, device=self.device)
         
