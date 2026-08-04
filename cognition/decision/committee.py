@@ -34,6 +34,10 @@ class DecisionCommittee:
             "concept": 0.20,    # 概念（动机选择器——③：身体经验压缩
                                 # 的"关注选择器"；价值经委员会加权，
                                 # 不直驱动作——护栏裁决 B 模式）
+                                # 注：无 concept 票时（direct 模式）
+                                # 该权重零参与——total 无归一化依赖，
+                                # 零影响严格成立（decide 仅对有的票
+                                # 加权求和，argmax/conflict 不受影响）
         }
         self.last_votes = {}
         self.conflict_mode = False   # 深思模式
