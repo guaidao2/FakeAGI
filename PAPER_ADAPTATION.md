@@ -1,6 +1,7 @@
 # 规则变化适应中的多通道误差修正：FakeAGI 与 Active Inference 基线的对比研究
 
 **FakeAGI 分论文一**（总论文之外的独立实证论文）
+总论文（理论基座）：[PAPER.md](PAPER.md)（十一公理体系与架构全貌）
 
 玄幕安全团队 - guaidao2 · 2026-08
 

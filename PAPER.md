@@ -1112,3 +1112,19 @@ A-E 全 OK。**科学检验**（`test_override_stats.py`）：机制层面真实
 5. Seth, A. K., & Tsakiris, M. (2018). Being a beast machine: The somatic basis of selfhood. *Trends in Cognitive Sciences*, 22(11), 969-981.
 6. Hawkins, J., & Blakeslee, S. (2004). *On intelligence*. Times Books.
 7. Lake, B. M., et al. (2017). Building machines that learn and think like people. *Behavioral and Brain Sciences*, 40, e253.
+
+---
+
+## 分论文系列（本总论文的独立实证论文）
+
+> 总论文（本文）给出十一公理体系与架构全貌；分论文逐项给出独立实证。
+> 每篇分论文可独立引用，均链接回本总论文作为理论基座。
+
+| 编号 | 分论文 | 主题 | 状态 |
+|------|--------|------|------|
+| 分论文一 | [PAPER_ADAPTATION.md](PAPER_ADAPTATION.md) | 规则变化适应中的多通道误差修正 vs Active Inference 基线（数学推导 + pymdp 对比实验——已证明增量：适应 2/5 vs 0/5 seed）| ✅ 已发布（2026-08）|
+| 分论文二 | （待定）| 概念层：价值锚聚类到零样本迁移（路线 B 完整实证）| 📝 规划中 |
+| 分论文三 | （待定）| 社会智能：语言社会性与 SpeakerTrust（协作 18 vs 独行 1）| 📝 规划中 |
+| 分论文四 | （待定）| 十一公理体系：从哲学到可执行架构（方法论论文）| 📝 规划中 |
+
+**引用建议**：分论文引用格式 = 分论文作者 + 总论文（本文）作为理论基座引用。
