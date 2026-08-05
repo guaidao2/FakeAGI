@@ -376,7 +376,7 @@ def main():
                                goal_enabled=False)["food"]
         goal_on += r_on["food"]
         stick_total += sum(g["stick"] for g in r_on["goal"].values())
-    print(f"  目标机制开: 食物={goal_on}（×3seeds）| 关: 食物={goal_off}"
+    print(f"  目标机制开: 食物={goal_on}（×{len(seeds)}seeds）| 关: 食物={goal_off}"
           f"（坚持动作 {stick_total} 次）")
     persist_ok = goal_on > goal_off * 2  # 坚持机制显著提升完成率（>2x）
     print(f"  坚持有效{'OK' if persist_ok else 'FAIL'}"
@@ -417,7 +417,7 @@ def main():
                                 goal_enabled=False,
                                 hidden_dim=hdim)["food"]
         print(f"  {label}: 目标机制开 食物={f_on} | 关 食物={f_off}"
-              f"（×3seeds 合计）")
+              f"（×{len(seeds)}seeds 合计）")
     # 容量增益判据：大模型关 > 小模型关（纯容量对照，无机制混杂）
     # （nit：原 423-429 预循环为无效代码被清零覆盖——已删除）
     small_off = big_off = 0
@@ -432,7 +432,7 @@ def main():
                               hidden_dim=128)["food"]
     cap_ok = big_off > small_off
     print(f"  容量增益（关对照）: 大模型 {big_off} vs 小模型 {small_off}"
-          f"（×3seeds）{'有增益' if cap_ok else '未决（需RandomState隔离重测）'}"
+          f"（×{len(seeds)}seeds）{'有增益' if cap_ok else '未决（需RandomState隔离重测）'}"
           f"（大 > 小 为判据；序列敏感下不可下结论）")
 
     # 稀缺度梯度（用户生物学假设验证）：
@@ -480,7 +480,7 @@ def main():
                         food_sum, gap_avg))
     print("\n=== 稀缺度-成本-冲突曲线（假说检验）===")
     for label, conf, surv, single, food, gap in summary:
-        print(f"  {label}: 冲突={conf}（×3seeds）双总食物={food} "
+        print(f"  {label}: 冲突={conf}（×{len(seeds)}seeds）双总食物={food} "
               f"双最差存活={surv:.0f} 单最差存活={single:.0f} 存活差均值={gap:.0f}")
 
     # 假说后半（补验）：丰富 + 成本升高 → 共存
@@ -540,7 +540,7 @@ def main():
         soc_off = run_social(seed=s, **dict(n_food=2, gather_cost=15),
                              other_enabled=False)
         conf_off += soc_off["conflicts"]
-    print(f"  他者开: 冲突={conf_on}（×3seeds 合计）| 他者关: 冲突={conf_off}")
+    print(f"  他者开: 冲突={conf_on}（×{len(seeds)}seeds 合计）| 他者关: 冲突={conf_off}")
     if conf_on > conf_off:
         print("  社会感知贡献：他者模型激活显著增加冲突（感知驱动竞争）")
     else:
