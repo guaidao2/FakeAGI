@@ -42,6 +42,7 @@
 > - ✅ **跨文化认知框架对照（WISDOM.md——科学化表述）**：控制论/神经科学/ML 术语为主、古哲学仅作历史先例标注（retrospective mapping，非理论来源）——对照表 13 条（负反馈/剪枝/结构可塑性/正负价值编码/无外部奖励/层级涌现/符号接地/元可塑性/对比学习/时变上下文/稳态设定点/容量风险/资源冗余）+ 4 条可工程化启发（正负概念镜像/结构变更提前触发/感知-符号-推理分层/修正幅度阻尼）+ 论文旁证观察 + 边界声明（占卜解释学≠统计预测，不混用）
 > - ✅ **认识论层补入公理体系（休谟/皮尔士/斯多葛/康德/孙子/墨家对照）**：④ 加认识论子条款——"误差该被信多少"=休谟归纳问题的工程化（精度加权=归纳不确定性显式建模）；"为什么预测误差是对的"=皮尔士实用主义论证（真理=有效行动指南）；WISDOM 扩充对照 9 条（置信度估计/架构先验/控制点/实用主义/防御优先/三表法/多重草稿/自指分层/视角建构）+ 认识论层诊断（十一公理原为系统论——补④后升级为系统论+认识论）
 > - ✅ **全量实验矩阵回归（2026-08 跑批——63 测试全编译绿）**：快速组 29/34 PASS（5 FAIL 均已知诚实记录：cross_domain 1.0x 负结果/pomdp 未学会/superposition 未吃到/language_intent 生存边缘/control_ab 超时→重跑完成）；长跑组 18 项（concept 系列 OK 可复现/E14 A-D OK+E 环境限制/goal_layer n=30 扫掠落差无增量/language_coop 协作 18vs1/transfer 少样本 OK/process_selector 叠加态 OK/cross_domain_v2 微弱占优/language_survival 已知边缘/evolution 跨代改善/other_agent 全过/concept_deep 已知负结果/concept_transfer 零样本 80%+/organ_gen 器官未帮助觅食/emergent_ablate 组合不劣于对照）；**E1-E6 历史实验全 PASS**；process_integration C 边缘波动（0.06<0.1——通路工作学习速率略降——不硬修）；social（路线 C 最重）3600s 跑批中——**test_results.md 本地记录（.gitignore 不入库——尊重'实验数据不入库'约定）**
+> - ✅ **欲望架构设计（DESIGN_DESIRES.md——用户洞察：探索单调性）**：现状诊断（curiosity=learning progress 信息论驱动 + drives 6 生理维度弱耦合）；科学依据（Oudeyer 内在动机三类/Kiverstein 稳态好奇心/Schultz 多巴胺/动机显著性）；架构（五类欲望→动机池→委员会仲裁——欲望满足统一=预测误差下降④自洽）；阶段路线（A drives×curiosity 耦合：饥饿显著性放大探索——一行级；B 能力欲望：GameNN confidence 上升率；C 欲望-概念绑定；D 社交欲望）；诚实风险（欲望空转/过拟合/需探索多样性新判据——访问熵/技能数）
 > 本文档描述下一代 FakeAGI 的进化能力。
 
 ## 0. 核心决策
