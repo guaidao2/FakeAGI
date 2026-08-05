@@ -351,13 +351,17 @@ def run_single(seed=0, max_ticks=3000, n_food=4, gather_cost=0):
 
 def main():
     import torch
+    import os
     np.random.seed(42)
     torch.manual_seed(42)  # AGI 内部 torch 网络（LNN/GameNN）必须同 seed——
     # 缺此则每次运行 AGI 初始化不同（复检不一致暴露，E14 同款修复）
     print("=" * 60)
     print("路线 C — 多智能体社会实验（稀缺度梯度 × 获取成本）")
     print("=" * 60)
-    seeds = (42, 7, 2026)
+    # SOCIAL_QUICK=1：缩减回归模式（1 seed × 每段——全量已在交付时
+    # 验证；回归仅确认通路可运行；print 需 -u 或 flush 防缓冲丢失）
+    quick = os.environ.get("SOCIAL_QUICK", "0") == "1"
+    seeds = (42,) if quick else (42, 7, 2026)
 
     # ── 目标坚持机制验证（用户洞察：坚持=目标未完成，放弃=重大预测误差）──
     print("\n=== 目标坚持机制验证（gather_cost=15）===")
