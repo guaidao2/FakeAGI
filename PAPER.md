@@ -1023,6 +1023,37 @@ A-E 全 OK。**科学检验**（`test_override_stats.py`）：机制层面真实
 
 ---
 
+### 4.18 pymdp 基线对比（Fable 批评响应——坐标系建立）
+
+**背景（Fable 批评）**：本系统独立推导出"预测误差是唯一修正信号""智能=自维持"——外部评审指出这是 active inference（Friston 自由能原理）和 autopoiesis（Maturana & Varela）的重新发现，并非独立路线。该批评意味着：**我们的工作需要一个坐标系**——与现成的 active inference 实现（pymdp）同环境对比，定位真实差异，而非宣称独立。
+
+**设计**：同一 5×5 网格环境（食物/水/稳态需求 + 规则变化：tick 300 食物 [0,0]→[4,4]），两系统同一接口：
+
+| 配置 | FakeAGI | pymdp（inferactively-pymdp 1.0.3）|
+|------|---------|--------------------------------|
+| 感知 | 连续方向向量 | 离散方向/类型观测（A 矩阵=感知先验，食物初始位置编码）|
+| 行动 | 委员会投票（5 动作）| 变分推断→策略选择（B 矩阵=确定性转移先验）|
+| 偏好 | 动态 V（驱动力驱动）| 静态 C 矩阵（食物/水偏好）|
+| 学习 | 多渠道误差修正 | infer_parameters（Dirichlet A/B 在线更新）|
+| 判据 | 存活 tick / 变化前食物 / 变化后食物（适应速度）| 同左 |
+
+**结果（5 seeds 均值）**：
+
+| 指标 | FakeAGI | pymdp |
+|------|---------|-------|
+| 存活 tick | 600（活满）| 600（活满）|
+| 变化前食物（剥削）| ~110 | 295 |
+| 变化后食物（适应）| 0-60（2/5 seed 恢复）| 0（0/5 适应）|
+
+**差异定位**：
+1. **剥削（exploitation）**：pymdp 的精确贝叶斯推断在已知环境显著更高效（295 vs ~110）——**证实 Fable 判断：本系统的预测误差机制是 active inference 的未数学化版本**，其基础推理更精确。
+2. **适应（adaptation）**：规则变化后 FakeAGI 部分恢复（多渠道误差修正：世界模型/概念库/GameNN TD 并行更新），pymdp 未适应（单 A 矩阵 Dirichlet 更新在 300 tick 内未收敛）——**增量候选：多通道误差修正 vs 单通道参数更新**。
+3. **待探索**：pymdp 学习率敏感性（lr_pA）、只学 A 不学 B 是否更稳、更长时窗适应曲线。
+
+**启示（公理体系）**：④ 公理"预测误差=变分自由能"获得实证确认；precision weighting（精度加权）与主动采样被定位为真实增量（见 §2 公理④ 认识论子条款）；坐标系建立后，本系统的独有组件（概念层/符号化/社会智能/生长-修剪）成为可测的增量候选。
+
+**诚实边界**：本实验为机制差异定位（非胜负）；两系统的先验注入（pymdp A/B 矩阵 vs FakeAGI 反射/概念初始化）不完全对等——差异归因需在更精细配置下复核。环境安装备注：PyPI `pymdp` 为无关 MDP 包，官方库为 `inferactively-pymdp`；jax 版安装曾破坏 torch DLL（本地 wheel 恢复）；`sample_action` 有 beta 缺陷（q_pi argmax 手动选策略绕过）。完整细节见 `COMPARISON.md`。
+
 ## 5. 讨论
 
 ### 5.1 与主流路线的对比
@@ -1074,6 +1105,7 @@ A-E 全 OK。**科学检验**（`test_override_stats.py`）：机制层面真实
 ## 参考文献
 
 1. Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
+1b. Heins, C., et al. (2023). pymdp: A Python library for active inference in discrete state spaces. *Journal of Open Source Software*（§4.18 基线对比实现）. 
 2. Hasani, R., et al. (2021). Liquid time-constant networks. *Proceedings of the AAAI Conference on Artificial Intelligence*, 35(9), 7657-7666.
 3. Schmidhuber, J. (2010). Formal theory of creativity, fun, and intrinsic motivation (1990–2010). *IEEE Transactions on Autonomous Mental Development*, 2(3), 230-247.
 4. Maturana, H. R., & Varela, F. J. (1980). *Autopoiesis and cognition: The realization of the living*. Springer.
