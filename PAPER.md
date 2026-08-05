@@ -1023,9 +1023,9 @@ A-E 全 OK。**科学检验**（`test_override_stats.py`）：机制层面真实
 
 ---
 
-### 4.18 pymdp 基线对比（Fable 批评响应——坐标系建立）
+### 4.18 pymdp 基线对比（外部评审响应——坐标系建立）
 
-**背景（Fable 批评）**：本系统独立推导出"预测误差是唯一修正信号""智能=自维持"——外部评审指出这是 active inference（Friston 自由能原理）和 autopoiesis（Maturana & Varela）的重新发现，并非独立路线。该批评意味着：**我们的工作需要一个坐标系**——与现成的 active inference 实现（pymdp）同环境对比，定位真实差异，而非宣称独立。
+**背景（外部评审意见）**：本系统独立推导出"预测误差是唯一修正信号""智能=自维持"——外部评审指出这是 active inference（Friston 自由能原理）和 autopoiesis（Maturana & Varela）的重新发现，并非独立路线。该批评意味着：**我们的工作需要一个坐标系**——与现成的 active inference 实现（pymdp）同环境对比，定位真实差异，而非宣称独立。
 
 **设计**：同一 5×5 网格环境（食物/水/稳态需求 + 规则变化：tick 300 食物 [0,0]→[4,4]），两系统同一接口：
 
@@ -1046,7 +1046,7 @@ A-E 全 OK。**科学检验**（`test_override_stats.py`）：机制层面真实
 | 变化后食物（适应）| 0-60（2/5 seed 恢复）| 0（0/5 适应）|
 
 **差异定位**：
-1. **剥削（exploitation）**：pymdp 的精确贝叶斯推断在已知环境显著更高效（295 vs ~110）——**证实 Fable 判断：本系统的预测误差机制是 active inference 的未数学化版本**，其基础推理更精确。
+1. **剥削（exploitation）**：pymdp 的精确贝叶斯推断在已知环境显著更高效（295 vs ~110）——**证实评审判断：本系统的预测误差机制是 active inference 的未数学化版本**，其基础推理更精确。
 2. **适应（adaptation）**：规则变化后 FakeAGI 部分恢复（多渠道误差修正：世界模型/概念库/GameNN TD 并行更新），pymdp 未适应（单 A 矩阵 Dirichlet 更新在 300 tick 内未收敛）——**增量候选：多通道误差修正 vs 单通道参数更新**。
 3. **待探索**：pymdp 学习率敏感性（lr_pA）、只学 A 不学 B 是否更稳、更长时窗适应曲线。
 

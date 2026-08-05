@@ -1,7 +1,7 @@
 # FakeAGI vs pymdp（Active Inference）基线对比
 
-> Fable 批评："你的预测误差机制 = active inference 的重新发现——去跑 pymdp
-> 基线，你的工作才开始有坐标系。"
+> 外部评审指出：本系统的"预测误差=唯一信号"与 active inference 同构
+> （Friston 自由能原理）——需要 pymdp 基线建立坐标系。
 > 本实验回应：**建立坐标系，定位差异，而非证明胜负。**
 
 ## 实验设计
@@ -35,7 +35,7 @@
 
 ### 1. 剥削（exploitation）：pymdp 更优
 pymdp 的精确贝叶斯推断（变分后验）在已知环境高效剥削（295 次吃 vs
-FakeAGI ~110——反射/概念引导的粗放移动）。**这证实 Fable 判断：
+FakeAGI ~110——反射/概念引导的粗放移动）。**这证实外部评审的判断：
 我们的预测误差机制是 active inference 的未数学化版本——它的基础
 推理更精确。**
 
@@ -50,7 +50,7 @@ A 矩阵 Dirichlet 更新，300 tick 内未收敛——lr=0.5 敏感性待探索
 - FakeAGI 适应波动的根因（seed 依赖——概念形成时机）
 - 更长时间窗（600→2000 tick）两者适应曲线
 
-## 对 FakeAGI 的启示（Fable 批评的正面转化）
+## 对 FakeAGI 的启示（外部评审的正面转化）
 
 1. **④ 公理确实 = 变分自由能**——FakeAGI 的误差修正机制应引入
    **精度加权**（precision-weighted prediction error——Friston）：
@@ -79,4 +79,4 @@ A 矩阵 Dirichlet 更新，300 tick 内未收敛——lr=0.5 敏感性待探索
 
 ## 日期
 
-2026-08（Fable 批评响应）
+2026-08
