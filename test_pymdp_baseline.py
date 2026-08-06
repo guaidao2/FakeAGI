@@ -203,9 +203,11 @@ def build_pymdp_agent(seed=0):
     return agent
 
 
-def run_pymdp(env, agent, max_ticks=600, rng_key=None):
+def run_pymdp(env, agent, max_ticks=600, rng_key=None,
+              lr_pA=0.5, lr_pB=0.5, learn_b=True):
     """pymdp agent 主循环：观测→推断→策略→行动→学习
-    返回存活 tick（食物统计在 env 计数器）"""
+    返回存活 tick（食物统计在 env 计数器）
+    扩展（分论文一抗辩实验）：lr_pA/lr_pB 可扫；learn_b=False=只学 A"""
     key = jax.random.PRNGKey(42) if rng_key is None else rng_key
     for t in range(max_ticks):
         # 观测（one-hot + batch：食物方向/水方向/类型）
@@ -231,7 +233,8 @@ def run_pymdp(env, agent, max_ticks=600, rng_key=None):
                 agent = agent.infer_parameters(
                     beliefs_A=qs, observations=obs,
                     actions=jnp.array([[[a_idx]]], dtype=jnp.int32),
-                    beliefs_B=qs, lr_pA=0.5, lr_pB=0.5)
+                    beliefs_B=qs if learn_b else None,
+                    lr_pA=lr_pA, lr_pB=lr_pB if learn_b else 0.0)
             except Exception as e:
                 print(f"  [WARN] infer_parameters: {e}", flush=True)
         if not env.alive():
@@ -259,24 +262,61 @@ def run_fakeagi(env, max_ticks=600, seed=0):
 
 
 def main():
+    import os
     print("=" * 60)
     print("FakeAGI vs pymdp（Active Inference）基线对比")
     print("=" * 60)
-    N = 5
-    change_at = 300  # 规则变化点（食物 [0,0]→[4,4]）
+    # 分论文一抗辩实验模式（环境变量）：
+    #   PM_SCAN=1    pymdp lr 扫描（0.1/0.5/1.0/2.0 × 3seeds）
+    #   PM_LONG=1    长时窗 2000 tick（FakeAGI vs pymdp × 3seeds）
+    #   PM_AONLY=1   只学 A（排除 B 学习干扰）
+    scan = os.environ.get("PM_SCAN", "0") == "1"
+    longw = os.environ.get("PM_LONG", "0") == "1"
+    aonly = os.environ.get("PM_AONLY", "0") == "1"
+    N = 3 if (scan or longw or aonly) else 5
+    change_at = 300 if not longw else 1000  # 长时窗变化点后移
+    max_t = 2000 if longw else 600
+
+    if scan:
+        print("\n=== pymdp lr 扫描（变化后食物——适应速度）===")
+        for lr in (0.1, 0.5, 1.0, 2.0):
+            ea_vals = []
+            for s in range(N):
+                e2 = GridEnv(seed=s, change_at=change_at)
+                ag = build_pymdp_agent(seed=s)
+                run_pymdp(e2, ag, max_ticks=max_t, lr_pA=lr, lr_pB=lr)
+                ea_vals.append(e2.eats_after)
+            print(f"  lr={lr}: 变化后食物 {np.mean(ea_vals):.1f}±{np.std(ea_vals):.1f}"
+                  f"（{ea_vals}）", flush=True)
+        print("\n  解读: 若高 lr 显著提升变化后食物→多通道优势需修正（诚实记录）")
+        return
+
+    if aonly:
+        print("\n=== pymdp 只学 A（排除 B 学习干扰）===")
+        for lb in (True, False):
+            ea_vals = []
+            for s in range(N):
+                e2 = GridEnv(seed=s, change_at=change_at)
+                ag = build_pymdp_agent(seed=s)
+                run_pymdp(e2, ag, max_ticks=max_t, learn_b=lb)
+                ea_vals.append(e2.eats_after)
+            print(f"  学B={'是' if lb else '否'}: 变化后食物 {np.mean(ea_vals):.1f}"
+                  f"±{np.std(ea_vals):.1f}（{ea_vals}）", flush=True)
+        return
+
     fa_ticks, pm_ticks = [], []
     fa_eb, fa_ea, pm_eb, pm_ea = [], [], [], []
     for s in range(N):
         # FakeAGI
         e1 = GridEnv(seed=s, change_at=change_at)
-        t1 = run_fakeagi(e1, max_ticks=600, seed=s)
+        t1 = run_fakeagi(e1, max_ticks=max_t, seed=s)
         fa_ticks.append(t1)
         fa_eb.append(e1.eats_before)
         fa_ea.append(e1.eats_after)
         # pymdp
         e2 = GridEnv(seed=s, change_at=change_at)
         ag = build_pymdp_agent(seed=s)
-        t2 = run_pymdp(e2, ag, max_ticks=600)
+        t2 = run_pymdp(e2, ag, max_ticks=max_t)
         pm_ticks.append(t2)
         pm_eb.append(e2.eats_before)
         pm_ea.append(e2.eats_after)
