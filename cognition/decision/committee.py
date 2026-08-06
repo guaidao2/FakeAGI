@@ -188,8 +188,14 @@ class DecisionCommittee:
         w = self.compute_weights(health, stress, confidence, energy,
                                  concept_active=("concept" in votes
                                                  and votes["concept"] is not None))
-        if reflex_scale < 1.0:
+        # 终审修复：reflex_scale 在归一化后缩放会（a）破坏 panic 分支的
+        # 保命反射主导（0.65×0.3 < limbic 0.30）——panic 豁免；
+        # （b）权重和降 → conflict 阈值敏感度漂移——缩放后重新归一化。
+        if reflex_scale < 1.0 and not self.panic_mode:
             w["reflex"] = w.get("reflex", 0.0) * reflex_scale
+            _tot = sum(w.values())
+            if _tot > 0:
+                w = {k: v / _tot for k, v in w.items()}
         self.last_votes = {k: v.tolist() for k, v in votes.items() if v is not None}
         
         # 加权求和
