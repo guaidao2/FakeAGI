@@ -253,7 +253,11 @@ def run_fakeagi(env, max_ticks=600, seed=0):
     agi.set_env(env)
     agi.set_cognition(CognitionPipeline({}))
     agi.metacognition = None
-    agi._info_seek_enabled = False
+    # 任务一：规则变化适应场景开启定向扫掠（信息寻求——饥饿时系统性
+    # 找新区域；原默认关闭是保守门控，但本对比测"完整 FakeAGI 能力"——
+    # 信息寻求是架构组成部分，开启符合对比语义）
+    agi._info_seek_enabled = True
+    agi._goal_enabled = True
     for _ in range(max_ticks):
         agi.step()
         if not agi.alive:

@@ -731,9 +731,15 @@ class AGI:
                 self.committee_state = decision
                 # 信息寻求覆盖：定向扫掠动作优先（目标层落差驱动）
                 # 恐慌模式例外：危机时不扫掠（保命优先）
+                # 任务一修复：仅"无线索"时扫掠生效（obs[0:2] 无目标方向——
+                # 全可观察环境下食物方向可见时反射主导；盲扫覆盖反射 =
+                # 新断线——扫掠乱走不朝食物导致 0 吃）
+                _has_food_dir = (len(obs) >= 2
+                                 and (abs(obs[0]) > 0.05 or abs(obs[1]) > 0.05))
                 if (self._info_seek_action is not None
                         and not (self.committee.panic_mode
-                                 if self.committee is not None else False)):
+                                 if self.committee is not None else False)
+                        and not _has_food_dir):
                     action = self._info_seek_action
                 # MoE 专家决策覆盖（仅在专家池成熟且置信时）
                 if (moe_action is not None and self.moe is not None

@@ -53,13 +53,21 @@ class DecisionCommittee:
             wx, wy = obs[2], obs[3]
             energy = body_state.get("energy", 1.0)
             water = body_state.get("water", 1.0)
-            hungry = energy < 0.8
+            hungry = energy < 0.95   # 有目标方向即利用（全可观察不浪费信息——
+            # 任务一：原 0.8 太苛刻——变化后能量余量 1.5 需 175 tick 才触发
+            # 反射 → 太晚找新食物 → 600 tick 来不及（伪 boredom 移除后暴露）
             thirsty = water < 0.6
             # 方向选择：口渴且（不饿 或 水比食物更危急）→ 朝水
             if thirsty and (not hungry or water < 0.3):
                 if abs(wx) > 0.05 or abs(wy) > 0.05:
                     dx, dy = wx, wy
                 # 水方向不可见（(0,0)——如 BioEnv）→ 保持食物方向（反射不失明）
+            # 任务一修复：到达目标即停留（吃/喝本能——目标方向为零时停留执行；
+            # 此前到食物格无停留票 → 走到不吃又走开——变化后概念未在新位置
+            # 形成前鸡生蛋死锁——本能为真机制非伪象回填）
+            if (hungry or thirsty) and abs(dx) <= 0.05 and abs(dy) <= 0.05:
+                vote[0] = 1.0
+                return vote
             if (hungry or thirsty or secondary_reached) and (abs(dx) > 0.05 or abs(dy) > 0.05):
                 if abs(dx) > abs(dy):
                     a = 3 if dx > 0 else 2
