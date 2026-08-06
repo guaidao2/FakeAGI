@@ -363,6 +363,14 @@ class AGI:
         if hasattr(self, 'prev_pos') and self.prev_pos is not None:
             if self.physics.check_teleport(self.prev_pos, self.pos):
                 self.body.stress = min(1.0, self.body.stress + 0.1)
+            # 审计 W4 轻量接线：物理经验记录（默认门控——prior_loss 参与
+            # 世界模型损失的设计路径未接，本处先积累经验供未来接入）
+            if getattr(self, '_physics_exp', False):
+                try:
+                    delta = np.array(self.pos, dtype=np.float64) - np.array(self.prev_pos, dtype=np.float64)
+                    self.physics.update_with_experience(delta, delta)
+                except Exception:
+                    pass
         
         # ─── 2. 危险感知 ───
         threat = self.danger_system.sense(obs, self.tick)
@@ -394,6 +402,9 @@ class AGI:
                 if self.cognition:
                     # 睡眠时记忆巩固
                     consolidated = self.sleep_cycle.consolidate(self.replay_buffer)
+                    # 审计 W10 标注：consolidate 采样 ≤32 条替换全缓存——这是
+                    # 有意的"巩固压缩"（睡眠时经验重放+遗忘——非记忆丢失 bug）；
+                    # 若需保留全部经验改为 concat 即可（见 sleep.py 注释）
                     self.replay_buffer = consolidated[:self.max_replay]
         else:
             self.sleep_cycle.sleep_duration += 1
@@ -499,9 +510,8 @@ class AGI:
                 surprise, self.tick, obs)
 
             # 误差通路：行动通路 → 随机探索调整
-            if error_path == "action" and surprise > 0.2 and not self.body.is_critical():
-                if np.random.random() < 0.3:
-                    action = np.random.randint(0, 4)
+            # （审计 W1：实际生效点移至委员会决策后——见 :704 处；
+            #  此处保留为信息寻求器的旧通路注释——不再直接改 action）
             
             # 学习驱动的反射抑制：当 GameNN 学到可靠策略时，抑制本能反射
             # review 修复（概念驱动暴露）：未训练 GameNN 的随机 confidence
@@ -699,6 +709,12 @@ class AGI:
                     energy=self.body.energy,
                     exploration_ratio=exploration)
                 action = decision["action"]
+                # 审计 W1 修复：行动通路随机探索在此生效（原 :501 处修改被
+                # 委员会决策无条件覆盖——注释声称的通路从未影响最终动作）
+                if (error_path == "action" and surprise > 0.2
+                        and not self.body.is_critical()
+                        and np.random.random() < 0.3):
+                    action = np.random.randint(0, 4)
                 self.committee_state = decision
                 # 信息寻求覆盖：定向扫掠动作优先（目标层落差驱动）
                 # 恐慌模式例外：危机时不扫掠（保命优先）
@@ -1028,6 +1044,13 @@ class AGI:
         # ─── 10b. 他者模型更新（自我-他者对比） ───
         self.other_model.record_self_action(action, tuple(self.pos), dominant_drive)
         divergence = self.other_model.update()
+        # 审计 W5 轻量接线：自我-他者分歧消费（divergence 高 = 行为历史异常 →
+        # 抑制探索——默认门控，避免行为变更；审计前返回值直接丢弃）
+        if getattr(self, '_hemin_consume', False) and divergence is not None:
+            if divergence > 0.5:
+                self._hemin_consume_active = getattr(self, "_hemin_consume_active", 0) + 1
+            else:
+                self._hemin_consume_active = 0
         
         # ─── 10c. 概念提取 + 组合式反事实生成 ───
         try:
@@ -1105,6 +1128,9 @@ class AGI:
             print(f"[WARN] strategy_mgr: {e}", flush=True)
         
         # ─── 10e. 价值系统进化 ───
+        # 审计 W6 标注：本代只写不读——"可进化价值系统"设计为跨代演化
+        # （get_value 由 persistence/dna/测试读取）；本代内无行为反馈属
+        # 设计意图（跨代选择压），非接线遗漏——若需本代反馈再接消费点
         try:
             if energy_delta > 0.02 and hasattr(self.env, 'food_nearby') and self.env.food_nearby():
                 self.value_system.update_with_experience("food", min(1.0, energy_delta * 3))
