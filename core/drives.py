@@ -100,6 +100,8 @@ class DriveSystem:
         bias = np.zeros(6)
         if self.hunger > 0.5:
             bias[:4] += 0.3  # 饥饿 → 移动觅食
+        if self.thirst > 0.5:
+            bias[:4] += 0.3  # 口渴 → 移动找水（与饥饿对称——欲望架构阶段 A）
         if self.fatigue_drive > 0.7:
             bias[4] = 1.0  # 太累 → 睡眠
         if self.curiosity > 0.5 and self.safety > 0.5:

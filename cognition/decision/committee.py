@@ -46,12 +46,18 @@ class DecisionCommittee:
         
     def reflex_vote(self, obs: np.ndarray, drive_bias: np.ndarray,
                     body_state: dict, secondary_reached: bool = False) -> np.ndarray:
-        """反射/本能投票：朝向主要目标（obs[0:2]），危急时强化"""
+        """反射/本能投票：朝向主要目标（obs[0:2] 食物 / obs[2:4] 水——按紧迫度），危急时强化"""
         vote = np.zeros(self.n_actions)
-        if len(obs) >= 2:
+        if len(obs) >= 4:
             dx, dy = obs[0], obs[1]
-            hungry = body_state.get("energy", 1.0) < 0.8
-            thirsty = body_state.get("water", 1.0) < 0.6
+            wx, wy = obs[2], obs[3]
+            energy = body_state.get("energy", 1.0)
+            water = body_state.get("water", 1.0)
+            hungry = energy < 0.8
+            thirsty = water < 0.6
+            # 方向选择：口渴且（不饿 或 水比食物更危急）→ 朝水
+            if thirsty and (not hungry or water < 0.3):
+                dx, dy = wx, wy
             if (hungry or thirsty or secondary_reached) and (abs(dx) > 0.05 or abs(dy) > 0.05):
                 if abs(dx) > abs(dy):
                     a = 3 if dx > 0 else 2
