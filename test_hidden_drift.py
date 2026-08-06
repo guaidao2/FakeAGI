@@ -38,8 +38,8 @@ class TestEnv:
         return {"energy_delta": ed, "water_delta": wd}
 
 
-np.random.seed(1001)
-torch.manual_seed(1001)
+# （终审 should-fix：删除残留固定 seed——覆盖 seed_run 使 SEED env 失效；
+#  seed_run 已在文件顶部 import 区调用）
 env = TestEnv()
 agi = AGI()
 agi.set_env(env)

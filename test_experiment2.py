@@ -11,7 +11,12 @@ import numpy as np
 from main import AGI
 from cognition import CognitionPipeline
 from seed_utils import seed_run, get_seed_from_env
-seed_run(get_seed_from_env(0))
+
+
+# （终审 nit：顶层 seed_run 加 __name__ 保护——当前无 import 者，
+#  防未来被引用时副作用）
+if __name__ == "__main__":
+    seed_run(get_seed_from_env(0))
 
 
 def run_single_test(initial_energy, initial_water, ticks=1000):

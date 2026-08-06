@@ -11,8 +11,9 @@
   - ask_noise: 响应失败率（0=有问必答，1=永远失败——N2）
 """
 import numpy as np
-from seed_utils import seed_run, get_seed_from_env
-seed_run(get_seed_from_env(0))
+# （终审 blocking 修复：process_env 是被 import 的库模块——顶层 seed_run
+#  造成 import 副作用（强制重置全局 RNG）——删除；调用方 test_process_selector
+#  自有 seed_run）
 
 
 
