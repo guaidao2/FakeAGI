@@ -37,7 +37,8 @@ class DriveSystem:
         self.last_surprise_avg = 0.0
     
     def update(self, body_state: dict, survival_prob: float,
-               surprise: float, tick: int, danger_nearby: bool = False):
+               surprise: float, tick: int, danger_nearby: bool = False,
+               repeat_ticks: int = 0):
         """
         从身体状态和外部信号更新所有驱动力
         """
@@ -66,16 +67,12 @@ class DriveSystem:
             base_curiosity += 0.3 * min(1.0, (survival_prob - 0.2) / 0.8)
         self.curiosity = np.clip(base_curiosity, 0.0, 1.0)
         
-        # 无聊驱动：当惊奇长期很低 + 生存概率高时产生
-        surprise_delta = abs(surprise - self.last_surprise_avg)
-        self.last_surprise_avg = 0.9 * self.last_surprise_avg + 0.1 * surprise
-        
-        if surprise < 0.05 and survival_prob > 0.8 and not body_state.get("sleeping", False):
-            self.stable_ticks += 1
-        else:
-            self.stable_ticks = max(0, self.stable_ticks - 2)
-        
-        self.boredom = np.clip(self.stable_ticks / 500.0, 0.0, 1.0)
+        # 无聊驱动：行为重复（最近动作重复度高——一直在撞墙/原地转）
+        # 审计 B3 修复后的正确语义：原逻辑 surprise<0.05 才积累 stable_ticks——
+        # surprise 真实流入后（0.5+ 常态）boredom 永不升 → 探索压制 → 适应崩。
+        # 无聊是"行为重复度"不是"环境平静度"（撞墙 surprise 很高但同样无聊）
+        self.repeat_ticks = max(0, int(repeat_ticks))
+        self.boredom = np.clip(self.repeat_ticks / 200.0, 0.0, 1.0)
         
         # 社交驱动（如果有其他个体在附近时激活）
         # NOTE: 当前为单个体，保留为 0

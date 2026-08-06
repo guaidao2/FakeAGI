@@ -419,7 +419,17 @@ class AGI:
         
         # ─── 6. 驱动力更新 ───
         body_state = self.body.get_state_dict()
-        self.drives.update(body_state, self.self_model.survival_prob, surprise, self.tick, danger_nearby)
+        # 审计 B3 修复：行为重复计数（无聊驱动的真实数据源——撞墙/原地转；
+        # 此前 surprise 恒 0 的伪 boredom 现已移除）
+        prev_a = getattr(self, "last_action", 0)
+        if prev_a == getattr(self, "_last_act_wiring", None):
+            self._repeat_ticks = getattr(self, "_repeat_ticks", 0) + 1
+        else:
+            self._repeat_ticks = 0
+        self._last_act_wiring = prev_a
+        self.drives.update(body_state, self.self_model.survival_prob, surprise,
+                           self.tick, danger_nearby,
+                           repeat_ticks=self._repeat_ticks)
         dominant_drive = self.drives.get_dominance()
         drive_bias = self.drives.get_action_bias()
 
@@ -442,7 +452,10 @@ class AGI:
             
             # 探索率由驱动力决定 + 目标层信息寻求调制
             if dominant_drive in ("hunger", "thirst", "fear"):
-                exploration = 0.05
+                # 审计 B1-B3 修复校准：原 0.05 完全关探索——变化后吃不到→
+                # hunger 升→探索关→只朝旧位置→死循环（适应 0/5）。
+                # 保留低探索（0.15）：饿极时也偶尔乱找（生物行为）
+                exploration = 0.15
             elif dominant_drive in ("boredom", "curiosity"):
                 exploration = 0.6
             elif dominant_drive in ("fatigue",):

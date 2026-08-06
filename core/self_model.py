@@ -56,7 +56,12 @@ class SelfModel:
         # 三个因素：能量、完整性、惊奇（惊奇太大 = 预测失败 = 危险）
         p_energy = self.energy
         p_integrity = self.integrity
-        p_predict = np.exp(-self.avg_surprise * 2.0)  # 惊奇→0 → 概率→1
+        # 审计 B1 修复校准：avg_surprise 现真实流入（此前恒 0）——系数 2.0 会
+        # 让正常探索的 surprise（0.5+）把生存概率压到 0.3 以下（curiosity 被
+        # 压死 → 规则变化后不探索 → 适应崩溃）。surprise 是学习信号（好奇/
+        # 探索来源）非死亡威胁——生存概率应由能量/完整性主导，surprise 仅
+        # 轻微修正（0.5 系数：avg 0.59 → 因子 0.75——有认知压力但非致死）
+        p_predict = np.exp(-self.avg_surprise * 0.5)  # 惊奇→0 → 概率→1
         
         old_prob = self.survival_prob
         self.survival_prob = np.clip(p_energy * p_integrity * p_predict, 0.0, 1.0)
