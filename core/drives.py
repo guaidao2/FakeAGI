@@ -33,8 +33,7 @@ class DriveSystem:
         self.last_drink = 0
         
         # 环境稳定计数器（用于无聊）
-        self.stable_ticks = 0
-        self.last_surprise_avg = 0.0
+        # （nit：stable_ticks/last_surprise_avg 死字段已删——B3 重构后无读写）
     
     def update(self, body_state: dict, survival_prob: float,
                surprise: float, tick: int, danger_nearby: bool = False,
@@ -85,7 +84,8 @@ class DriveSystem:
             "fatigue": self.fatigue_drive * 0.3,  # 大幅降权
             "fear": 1.0 - self.safety,
             "curiosity": self.curiosity,
-            "boredom": self.boredom * 0.3,
+            "boredom": self.boredom * 0.6,  # 降权 0.6（上限 0.6 > curiosity 下限 0.4——
+            #  boredom 满时可达主导；原 0.3 上限恒低于 curiosity 永不主导——设计失效）
         }
         return max(drives, key=drives.get)
     
