@@ -197,6 +197,8 @@ agi/
 > 数字定稿（2026-08-06 任务② seed 基建——5 seeds 均值化）：E1/E4 判定
 > 稳定 5/5 OK；E3（2/5 OK）与 E5（3/5 OK）种子依赖强——如实标注。
 > 同 seed 完全可复现（seed_utils.py）。
+> seed 基建已覆盖全部 65 个测试脚本（`SEED=s python test_x.py`——
+> 单 seed 可控、多 seed 设计保留、库模块 import 无副作用）。
 
 | 实验 | 结果 |
 |------|------|
