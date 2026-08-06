@@ -174,17 +174,22 @@ class DecisionCommittee:
     
     def decide(self, votes: dict, health: float, stress: float,
                confidence: float, energy: float,
-               exploration_ratio: float = 0.1) -> dict:
+               exploration_ratio: float = 0.1,
+               reflex_scale: float = 1.0) -> dict:
         """
         加权仲裁：
         - 每个决策者投票 → 加权求和 → argmax
         - 探索：以 exploration_ratio 概率随机选择
         - 冲突检测：前两名接近 → 报告 conflict（供外部深思）
+        - reflex_scale：学习抑制反射（GameNN 学到位时降反射权重——
+          断线修复：suppress_reflex 此前只定义无消费点）
         """
         self.exploration_ratio = exploration_ratio
         w = self.compute_weights(health, stress, confidence, energy,
                                  concept_active=("concept" in votes
                                                  and votes["concept"] is not None))
+        if reflex_scale < 1.0:
+            w["reflex"] = w.get("reflex", 0.0) * reflex_scale
         self.last_votes = {k: v.tolist() for k, v in votes.items() if v is not None}
         
         # 加权求和

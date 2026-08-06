@@ -720,7 +720,8 @@ class AGI:
                     stress=self.body.stress,
                     confidence=gamenn_confidence,
                     energy=self.body.energy,
-                    exploration_ratio=exploration)
+                    exploration_ratio=exploration,
+                    reflex_scale=0.3 if suppress_reflex else 1.0)
                 action = decision["action"]
                 # 审计 W1 修复：行动通路随机探索在此生效（原 :501 处修改被
                 # 委员会决策无条件覆盖——注释声称的通路从未影响最终动作）
