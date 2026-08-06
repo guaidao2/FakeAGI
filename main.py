@@ -403,7 +403,8 @@ class AGI:
                 self.body.fatigue = max(0.0, self.body.fatigue - 0.3)  # 醒来后疲劳大幅降低
         
         # ─── 5. 自模型更新标记位（实际更新放到认知处理之后） ───
-        surprise = 0.0
+        # 审计 B3 修复：surprise 用上一 tick 真实值（此前恒 0.0——boredom 通路失真）
+        surprise = getattr(self, "last_surprise", 0.0)
         
         # ─── 6. 驱动力更新 ───
         body_state = self.body.get_state_dict()
@@ -1112,6 +1113,15 @@ class AGI:
         
         # ─── 11. 紧急检测 ───
         self.survival_ticks += 1
+        # 审计 B2 接线：稳态告警接入（此前 check 零调用——alarms 恒空）
+        try:
+            self._homeostasis_alarms = self.homeostasis.check(self.body.get_state_dict())
+            if self.homeostasis.in_danger():
+                self._homeostasis_danger_ticks = getattr(self, "_homeostasis_danger_ticks", 0) + 1
+            else:
+                self._homeostasis_danger_ticks = 0
+        except Exception:
+            self._homeostasis_alarms = []
         # 睡眠额外恢复（只有真正进入睡眠状态才恢复）
         if self.body.is_sleeping:
             self.body.energy = min(2.0, self.body.energy + 0.003)
@@ -1130,6 +1140,18 @@ class AGI:
         # ─── 记录 ───
         self.last_action = action
         self.last_surprise = surprise   # 目标坚持机制用（真实 surprise 通路）
+        # 审计 B1 接线：自模型真实更新（此前 update() 零调用——survival_prob
+        # 恒 1.0 → 好奇/boredom 通路失真；energy_delta 用 body 真实变化）
+        try:
+            e_now = self.body.energy
+            e_delta = e_now - getattr(self, "_prev_body_energy_wiring", e_now)
+            self._prev_body_energy_wiring = e_now
+            self.self_model.update(
+                energy_delta=e_delta,
+                integrity_delta=0.0,
+                surprise=surprise)
+        except Exception:
+            pass
         self.prev_pos = tuple(self.pos) if hasattr(self, 'pos') else None
         
         return {
