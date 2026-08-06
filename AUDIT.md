@@ -49,3 +49,36 @@
      ├── 8. Homeostasis→决策反馈
      └── 9. 好奇心规划一
 ```
+
+---
+
+# 接线审计（2026-08-06 子代理 sa_431a166c——"零件装配"系统性死通路排查）
+
+**背景**：30+ 认知模块单独通过单元测试，但主循环接线反复出问题（历史：B1 info
+NameError、B3 gate 恒 1.0、override 死变量、reflex 缺水方向）。本次全链路审计
+（静态追踪 + 300 tick 冒烟）一次性抓出：
+
+## BLOCKING（数据真实性——已修）
+- **B1** SelfModel.update() 零调用 → survival_prob 恒 1.0 → curiosity/boredom
+  全失真 → 已接线（energy_delta 用 body 真实变化）+ 系数校准（2.0→0.5——
+  surprise 真实流入后原系数把生存概率压死）
+- **B2** Homeostasis 零调用 → alarms 恒空 → 已接入紧急检测段
+- **B3** drives.update 收 surprise 恒 0（process 前执行）→ boredom 恒升（伪）→
+  已修（传上一 tick last_surprise）+ boredom 重构（行为重复 repeat_ticks 驱动——
+  撞墙/原地转=无聊，非 surprise 低=无聊）
+
+## WARN（已处理）
+- W1 行动通路随机探索被委员会覆盖 → 移至决策后生效
+- W2 GameNN.learn 归因错位（建议动作 vs 执行动作）→ 加 action 参数
+- W3 causal_error 恒 0 → error_path=="action" 时=surprise
+- W4 物理直觉 prior_loss 未接 → 经验记录门控接入（设计路径仍待接）
+- W5 hemin 分歧无消费点 → 门控消费接入
+- W6/W10 有意设计标注（跨代价值系统/睡眠巩固压缩）
+- W7/W8/W9 有意设计/半实现标注（叠加态门控忽略/attention 恒等/strategy 半实现）
+
+## 科学影响（诚实记录）
+- 短窗适应 600t：3/5 → 1/5——**原适应部分依赖伪 boredom**（surprise 恒 0 时
+  boredom 恒升强制探索）——分论文一适应增量如实降级为"长时窗性质"（2000t 3/3）
+- 长时窗第二增量（动态稳态）：3/3 保持（76/41/74）——**探索真实化不破坏**——
+  且机制更真（生理欲望→目标导航 + §3.4 水动力学）
+- 经验：**接线验证必须用"数据流入断言"（monkeypatch 实测），不能只看调用点存在**
