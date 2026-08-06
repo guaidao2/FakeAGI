@@ -471,6 +471,9 @@ class AGI:
                 pass
             surprise = info.get("surprise", 0.0)
             error_path = info.get("error_path", "perception")
+            # 审计 W3 修复：causal_error 数据源（此前恒 0——因果缺口通路空转；
+            # 行动通路误差 = 我行动了但预测未消解 → 因果缺口信号）
+            self.causal_error = surprise if error_path == "action" else 0.0
 
             # B1 接线（DESIGN_CONCEPTS §7.5）：curiosity 接 learning
             # progress——world_model 误差下降率驱动探索率（ICM）。
@@ -738,7 +741,7 @@ class AGI:
                 else:
                     s = s[:sd]
                 reward = energy_delta * 10 + damage * (-5)
-                g.learn(reward, next_state=s)
+                g.learn(reward, next_state=s, action=action)
             # ─── ⑥ 迁移反馈：新环境跑够 500 tick 后，用 GameNN 置信度更新迁移可靠性 ───
             if (getattr(self, '_transfer_selector_enabled', False)
                     and self.transfer_selector is not None

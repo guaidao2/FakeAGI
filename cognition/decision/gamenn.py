@@ -104,10 +104,16 @@ class GameNNDecision:
             probs = torch.softmax(q_total, dim=-1)
         return probs.cpu().numpy()
     
-    def learn(self, reward: float, next_state: np.ndarray = None, done: bool = False):
-        """TD 误差学习"""
+    def learn(self, reward: float, next_state: np.ndarray = None, done: bool = False,
+              action: int = None):
+        """TD 误差学习（审计 W2：action 参数——实际执行动作归因。
+        此前用 process 内部建议动作（self.last_action）学习，而 reward 来自
+        委员会实际执行动作（语言/元认知/概念覆盖时归因错位污染 Q 值）"""
         if self.last_state is None or self.last_strategy is None:
             return
+        
+        # 实际执行动作（若提供）；否则回退建议动作（向后兼容）
+        exec_action = action if action is not None else self.last_action
         
         # 维度防护（grow 后 last_state 可能旧维——决策与学习跨 tick，
         # grow_state_dim 重建 q_net 后旧状态需对齐；next_state 同理）
@@ -118,7 +124,7 @@ class GameNNDecision:
             ls = (ls[:sd_now] if len(ls) > sd_now
                   else np.pad(ls, (0, sd_now - len(ls))))
         s = torch.tensor(ls, dtype=torch.float32, device=self.device).unsqueeze(0)
-        a = torch.tensor([self.last_action], dtype=torch.long, device=self.device)
+        a = torch.tensor([exec_action], dtype=torch.long, device=self.device)
         r = torch.tensor([reward], dtype=torch.float32, device=self.device)
         
         q_net = self.q_nets[self.last_strategy]
