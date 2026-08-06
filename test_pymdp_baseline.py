@@ -119,12 +119,12 @@ class GridEnv:
                 self.eats_before += 1
         if drink:
             self.water = min(1.0, self.water + 0.4)
-        self.energy -= 0.004   # 代谢（pymdp 端）
-        self.water -= 0.002
-        # FakeAGI 适配：main.py 期望 energy_delta 键（body 自带代谢——
-        # 故 delta 只含环境事件；代谢差异如实记录为系统特性）
-        ed = 0.5 if eat else 0.0
-        wd = 0.4 if drink else 0.0
+        self.energy -= 0.004   # 代谢（两系统一致——review 修复：原 FakeAGI
+        self.water -= 0.002    # 端 delta=0 靠 body base（~0.0005）=10× 不对称）
+        # FakeAGI 适配：delta 含环境代谢（body base 额外 -0.0003 披露——
+        # 总代谢 FakeAGI ≈0.0043 vs pymdp 0.004——7% 差异如实记录）
+        ed = 0.5 if eat else -0.004
+        wd = 0.4 if drink else -0.002
         return {"energy_delta": ed, "water_delta": wd,
                 "energy": self.energy, "water": self.water,
                 "ate": eat, "drank": drink}
