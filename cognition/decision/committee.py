@@ -57,7 +57,9 @@ class DecisionCommittee:
             thirsty = water < 0.6
             # 方向选择：口渴且（不饿 或 水比食物更危急）→ 朝水
             if thirsty and (not hungry or water < 0.3):
-                dx, dy = wx, wy
+                if abs(wx) > 0.05 or abs(wy) > 0.05:
+                    dx, dy = wx, wy
+                # 水方向不可见（(0,0)——如 BioEnv）→ 保持食物方向（反射不失明）
             if (hungry or thirsty or secondary_reached) and (abs(dx) > 0.05 or abs(dy) > 0.05):
                 if abs(dx) > abs(dy):
                     a = 3 if dx > 0 else 2
