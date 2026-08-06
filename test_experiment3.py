@@ -35,6 +35,8 @@ class Env:
 
 
 def test():
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     rounds = 10
     max_steps = 1000
     

@@ -13,6 +13,8 @@ from main import AGI
 from cognition import CognitionPipeline
 
 def test():
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("实验4: 因果推理 — 隐藏规则", flush=True)
     
     agi = AGI()
