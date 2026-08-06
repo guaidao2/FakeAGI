@@ -31,6 +31,9 @@ def make_memory(visited_frac=0.4, seed=0):
 
 
 def run(seed=0):
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(seed)  # nit 修复：get_exploration_target 用全局 rng——固定可复现
     rng = np.random.RandomState(seed)
     mem = make_memory(visited_frac=0.4, seed=seed)

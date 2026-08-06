@@ -26,6 +26,9 @@ def check(name, ok):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     ok = True
     com = DecisionCommittee(n_actions=5)
     # A. 渴且不饿 → 朝水（水在右侧 dx=0.8）

@@ -148,4 +148,7 @@ def evolve(generations=4, population=3, max_ticks=1200):
 
 
 if __name__ == "__main__":
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     evolve()

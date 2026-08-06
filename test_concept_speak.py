@@ -17,6 +17,9 @@ from cognition.concept_bank import ConceptBank
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("语言生成验证（概念→词——说）")
     print("=" * 56)

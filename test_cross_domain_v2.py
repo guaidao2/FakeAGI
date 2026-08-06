@@ -119,6 +119,9 @@ def eval_domain_B(Wh_init, theta_init, epochs=200, max_steps=40, seed=0,
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(42)
     print("=" * 60)
     print("④ 重启 — 特征层迁移 v2（真实训练 W_h，防堆牌）")

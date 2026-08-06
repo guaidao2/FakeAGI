@@ -78,6 +78,9 @@ def run_episode(other_strategy, max_ticks=2000, seed=0, other_enabled=True):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("他者模型验证 — 多智能体迷宫（竞争/合作/基线）")
     print("=" * 60)

@@ -350,6 +350,9 @@ def run_single(seed=0, max_ticks=3000, n_food=4, gather_cost=0):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     import torch
     import os
     np.random.seed(42)

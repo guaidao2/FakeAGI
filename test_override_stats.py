@@ -12,6 +12,9 @@ from main import AGI
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", action="store_true",

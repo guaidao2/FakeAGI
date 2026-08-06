@@ -20,6 +20,9 @@ from test_concept_transfer import train_mixed, eval_policy, LinearQ
 
 
 def scan():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(42)
     print("=" * 66)
     print("路线 B 收尾 — 参数扫描（L2 × 轮数 → D 收敛且 B 保持）")

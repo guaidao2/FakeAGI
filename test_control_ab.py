@@ -326,6 +326,9 @@ def run_rl_change(max_ticks=2000, seed=0):
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("实验12: 对照实验 — 预测误差 vs 外挂奖励 RL（修正版）", flush=True)
     print("定位：机制演示/初步观察（3 seeds，无显著性检验）", flush=True)
     print("=" * 60, flush=True)

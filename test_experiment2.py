@@ -10,6 +10,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from main import AGI
 from cognition import CognitionPipeline
+from seed_utils import seed_run, get_seed_from_env
+seed_run(get_seed_from_env(0))
+
 
 def run_single_test(initial_energy, initial_water, ticks=1000):
     """单次测试：给定初始能量/水分，观察行为"""

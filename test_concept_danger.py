@@ -20,6 +20,9 @@ from cognition.concept_bank import ConceptBank
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("负价值锚验证（danger 概念——⑧ 对称压缩）")
     print("=" * 56)

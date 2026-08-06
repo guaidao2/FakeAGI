@@ -179,6 +179,9 @@ def perturbation_invariance(agent, mode, trials=50, seed=3000):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     torch.manual_seed(42)
     print("=" * 60)
     print("① 概念深化 — MLP 非线性概念抽象")

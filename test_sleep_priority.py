@@ -14,6 +14,9 @@ from cognition.sleep import SleepCycle
 
 
 def run(seed=0):
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(seed)
     sc = SleepCycle()
     # 构造 100 条经验：10 条高 surprise(0.9)，90 条低 surprise(0.05)

@@ -61,6 +61,9 @@ class PixelEnv:
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("P6: 器官生长验证 — 高维输入自动生成感知器官", flush=True)
     cfg = {
         "input_dim": 8, "self_state_dim": 14,

@@ -73,6 +73,9 @@ def make_agi(env):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("③ 接入验证 — 情绪 + 他者进主循环")
     print("=" * 60)

@@ -53,6 +53,9 @@ class GrowingEnv:
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("P4: 观测维度增长 → 全链路协调生长测试", flush=True)
 
     agi = AGI()

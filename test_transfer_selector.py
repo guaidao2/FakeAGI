@@ -194,6 +194,9 @@ def few_shot(agent_q, mode, episodes=30, seed_base=100):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(42)
     print("=" * 60)
     print("⑥ 迁移价值评估器验证 — '何时能迁移'的元认知")

@@ -19,6 +19,9 @@ VOCAB = ["food", "water", "east", "west", "north", "south"]
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("P8c 句法层验证 — 词序学习 + 短语组合")
     print("=" * 60)

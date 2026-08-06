@@ -62,6 +62,9 @@ def make_form(seed, n=60, dim=8):
 
 
 def run():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     # 3 种训练形态（外观各异）
     train_pos = []
     train_neg = []

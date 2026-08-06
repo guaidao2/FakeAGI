@@ -17,6 +17,9 @@ from core.process_selector import SuperpositionEstimator, ProcessEstimator, Proc
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("C2 验证：叠加态可靠性估计器（被教歪可逆性）")
     print("=" * 60)

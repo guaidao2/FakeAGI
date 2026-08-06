@@ -78,6 +78,9 @@ class BodyStateCluster:
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("自我概念验证（身体状态簇——「我饿了」）")
     print("=" * 56)

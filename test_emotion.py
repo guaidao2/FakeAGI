@@ -16,6 +16,9 @@ from core.emotion import EmotionSystem
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("情绪系统验证 — 情感是物理的（恐惧/好奇/平静）")
     print("=" * 60)

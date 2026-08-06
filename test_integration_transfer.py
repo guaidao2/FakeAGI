@@ -63,6 +63,9 @@ def make_agi():
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(42)
     print("=" * 60)
     print("⑥ 接入主循环验证 — 迁移价值评估")

@@ -29,6 +29,9 @@ def build_cb():
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("威胁检查行为验证（danger 匹配→不停留）")
     print("=" * 56)

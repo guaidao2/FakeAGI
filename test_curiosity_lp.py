@@ -17,6 +17,9 @@ from core.curiosity import CuriosityManager
 
 
 def run():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     # A：三种 loss 序列的 learning progress
     cm = CuriosityManager()
     for v in np.linspace(1.0, 0.2, 60):      # 下降（在学）

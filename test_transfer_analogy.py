@@ -186,6 +186,9 @@ def eval_policy(agent, mode, trials=50, max_steps=60, seed=500, train=False,
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(42)  # 固定 seed：实验可复现（Should-fix）
     print("=" * 60)
     print("⑤ 触类旁通实验 — 策略层迁移（关系同构域对）")

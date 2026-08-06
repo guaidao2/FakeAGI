@@ -29,6 +29,9 @@ def make_agi():
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     ok = True
     # 迷宫模式（有食物/墙壁刺激——surprise 非 0，验证 drives 数据流入）
     agi = make_agi()

@@ -14,6 +14,9 @@ from cognition import CognitionPipeline
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     agi = AGI()
     agi.set_cognition(CognitionPipeline({
         "input_dim": 4, "self_state_dim": 14,

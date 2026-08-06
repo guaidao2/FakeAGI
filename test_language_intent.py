@@ -174,6 +174,9 @@ def intent_correlation(samples):
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("实验11: 语言意图 — 系统主动说话才能活", flush=True)
 
     # ─── 对照组（不会说话）───

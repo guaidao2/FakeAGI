@@ -62,6 +62,9 @@ def eval_pred_error(model, w, samples, n_test=100):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("④ 跨域迁移验证（重做）— 真实训练源域 + 公平基线")
     print("=" * 60)

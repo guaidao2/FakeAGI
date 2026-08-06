@@ -19,6 +19,9 @@ from core.speaker_trust import SpeakerTrust
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("他者可靠性建模验证（信任绑定说话者）")
     print("=" * 56)

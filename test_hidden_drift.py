@@ -3,6 +3,9 @@ import numpy as np
 import torch
 from main import AGI
 from cognition import CognitionPipeline
+from seed_utils import seed_run, get_seed_from_env
+seed_run(get_seed_from_env(0))
+
 
 
 class TestEnv:

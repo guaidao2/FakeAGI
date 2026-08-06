@@ -88,6 +88,9 @@ def run(mode, seed=0, ticks=1200):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("概念门控模式对照（护栏裁决：direct vs hint）")
     print("=" * 56)

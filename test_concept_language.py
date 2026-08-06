@@ -94,6 +94,9 @@ def run(symbol_enabled, seed=0, ticks=800):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("概念符号化端到端验证（词→概念→行为价值）")
     print("=" * 60)

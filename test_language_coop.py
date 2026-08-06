@@ -165,6 +165,9 @@ def run_episode(channel, coop, seed, ticks=800):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("多智能体语言协作验证（语言的社会性价值）")
     print("=" * 60)

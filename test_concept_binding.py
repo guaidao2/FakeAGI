@@ -27,6 +27,9 @@ def run_scenario(obs_list, v_list):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("概念预测绑定验证（概念→价值预测）")
     print("=" * 56)

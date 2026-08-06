@@ -120,6 +120,9 @@ def run_once(superposition: bool, max_ticks: int = 1200, seed: int = 0):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     trials = 3
     print("=" * 60, flush=True)
     print("A/B: 确定性世界模型 vs 薛定谔叠加态世界模型", flush=True)

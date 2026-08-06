@@ -182,6 +182,9 @@ def run_group(name, ask_noise, freeze=False, seeds=5, ticks=300,
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("过程选择验收（V1-V4）+ 负对照（N1-N4）", flush=True)
     print("=" * 60, flush=True)
 

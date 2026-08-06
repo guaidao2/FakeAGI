@@ -11,6 +11,9 @@ from main import AGI
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     agi = AGI()
     # 让 env 可 step（AGI 默认无 env 也能跑——用无 env 模式更可控）
     results = {}

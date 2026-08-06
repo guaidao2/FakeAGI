@@ -59,6 +59,9 @@ class LangEnv:
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("实验9: 语言能力 — 符号接地", flush=True)
     cfg = {
         "input_dim": 4, "self_state_dim": 14,

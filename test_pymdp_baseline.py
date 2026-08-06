@@ -266,6 +266,9 @@ def run_fakeagi(env, max_ticks=600, seed=0):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     import os
     print("=" * 60)
     print("FakeAGI vs pymdp（Active Inference）基线对比")

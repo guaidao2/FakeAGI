@@ -18,6 +18,9 @@ def diff(a, b):
 
 
 def run():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     torch.manual_seed(0)
     wm = WorldModel(input_dim=32, n_actions=5)
 

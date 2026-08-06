@@ -20,6 +20,9 @@ from cognition.concept_bank import ConceptBank
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("概念组合验证（概念图——可消耗物抽象）")
     print("=" * 56)

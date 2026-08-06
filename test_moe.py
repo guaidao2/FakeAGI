@@ -13,6 +13,9 @@ import numpy as np
 from cognition.decision.moe import MoERouter
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("P1: MoE 专家路由测试", flush=True)
     router = MoERouter(state_dim=16, n_actions=5, max_experts=6,
                        top_k=2, create_threshold=0.35,

@@ -214,6 +214,9 @@ def run_group(name, fn, seeds=30):
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("实验13: 目标层消融 — 目标表征是否修复 S2", flush=True)
     print("=" * 60, flush=True)
     g1 = run_group("G1 基线（无目标层）", lambda seed=0: run_fakeagi(False, seed=seed))

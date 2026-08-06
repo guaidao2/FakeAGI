@@ -180,6 +180,9 @@ def run_episode(full_mode=True, max_ticks=10000, env_seed=1):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     np.random.seed(42)
     import torch
     torch.manual_seed(42)  # 固定 torch RNG（superposition split 等依赖——可复现性）

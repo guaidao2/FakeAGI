@@ -11,6 +11,9 @@
   - ask_noise: 响应失败率（0=有问必答，1=永远失败——N2）
 """
 import numpy as np
+from seed_utils import seed_run, get_seed_from_env
+seed_run(get_seed_from_env(0))
+
 
 
 class ProcessEnv:

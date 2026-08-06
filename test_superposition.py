@@ -80,6 +80,9 @@ class HiddenRuleEnv:
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("薛定谔叠加态世界模型验证", flush=True)
     cfg = {
         "input_dim": 8, "self_state_dim": 14,

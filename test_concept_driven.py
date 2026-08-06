@@ -97,6 +97,9 @@ def run(concept_driven, seed=0, ticks=1200):
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 56)
     print("概念驱动行为验证（概念→行为引导）")
     print("=" * 56)

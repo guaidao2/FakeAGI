@@ -236,6 +236,9 @@ def run_episode(mode="perfect", process_enabled=True, frozen=False,
 
 
 def main():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("=" * 60)
     print("② 过程选择 — 完整主循环接入冒烟（单 seed）")
     print("=" * 60)

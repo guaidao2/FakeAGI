@@ -11,6 +11,9 @@ from main import AGI
 from cognition import CognitionPipeline
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("P0: checkpoint 持久化往返测试", flush=True)
     # 测试自洁：删除遗留旧档（旧代码生成的档含非安全对象，weights_only
     # 默认拒绝——新档由当前代码生成应 weights_only 兼容）

@@ -160,6 +160,9 @@ def comprehension_test(agi, env, lang, n=200):
 
 
 def test():
+
+    from seed_utils import seed_run, get_seed_from_env
+    seed_run(get_seed_from_env(0))
     print("实验10: 语言生存压力 — 只有懂语言才能活", flush=True)
 
     # ─── 对照组（语言关闭）───
