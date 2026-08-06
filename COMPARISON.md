@@ -39,10 +39,10 @@ FakeAGI ~110——反射/概念引导的粗放移动）。**这证实外部评�
 我们的预测误差机制是 active inference 的未数学化版本——它的基础
 推理更精确。**
 
-### 2. 适应（adaptation）：FakeAGI 部分占优
-规则变化后 FakeAGI 有 2/5 seed 恢复进食（30-60 次）——多渠道误差
+### 2. 适应（adaptation）：FakeAGI 占优（对称代谢复核）
+规则变化后 FakeAGI 4/5 seed 恢复进食（70-270 次）——多渠道误差
 修正（世界模型/概念库/GameNN TD 并行更新）；pymdp 0/5 适应（仅
-A 矩阵 Dirichlet 更新，300 tick 内未收敛——lr=0.5 敏感性待探索）。
+A 矩阵 Dirichlet 更新，300 tick 内未收敛——lr 0.1-1.0 扫描无改善）。
 
 ### 3. 未验证/待探索（诚实清单）
 - pymdp lr_pA 敏感性（更高学习率能否在 300 tick 内适应）
